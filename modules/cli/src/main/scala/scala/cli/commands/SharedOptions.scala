@@ -16,6 +16,7 @@ import scala.build.{Inputs, LocalRepo, Logger, Os, Positioned}
 import scala.concurrent.duration._
 import scala.util.Properties
 // format: off
+
 final case class SharedOptions(
   @Recurse
     logging: LoggingOptions = LoggingOptions(),
@@ -105,21 +106,6 @@ final case class SharedOptions(
 
   def logger = logging.logger
 
-  private def parseDependencies(
-    deps: List[Positioned[String]],
-    ignoreErrors: Boolean
-  ): Seq[Positioned[AnyDependency]] =
-    deps.map(_.map(_.trim)).filter(_.value.nonEmpty)
-      .flatMap { posDepStr =>
-        val depStr = posDepStr.value
-        DependencyParser.parse(depStr) match {
-          case Left(err) =>
-            if (ignoreErrors) Nil
-            else sys.error(s"Error parsing dependency '$depStr': $err")
-          case Right(dep) => Seq(posDepStr.map(_ => dep))
-        }
-      }
-
   def buildOptions(
     enableJmh: Boolean,
     jmhVersion: Option[String],
@@ -137,7 +123,7 @@ final case class SharedOptions(
         generateSemanticDbs = semanticDb,
         scalacOptions = scalac.scalacOption.filter(_.nonEmpty),
         compilerPlugins =
-          parseDependencies(dependencies.compilerPlugin.map(Positioned.none(_)), ignoreErrors),
+          SharedOptions.parseDependencies(dependencies.compilerPlugin.map(Positioned.none(_)), ignoreErrors),
         platform = platformOpt
       ),
       scriptOptions = ScriptOptions(
@@ -167,7 +153,7 @@ final case class SharedOptions(
           .map(os.Path(_, os.pwd)),
         extraRepositories = dependencies.repository.map(_.trim).filter(_.nonEmpty),
         extraDependencies =
-          parseDependencies(dependencies.dependency.map(Positioned.none(_)), ignoreErrors)
+          SharedOptions.parseDependencies(dependencies.dependency.map(Positioned.none(_)), ignoreErrors)
       ),
       internal = InternalOptions(
         cache = Some(coursierCache),
@@ -259,4 +245,19 @@ object SharedOptions {
     else
       Nil
 
+  def parseDependencies(
+    deps: List[Positioned[String]],
+    ignoreErrors: Boolean
+  ): Seq[Positioned[AnyDependency]] =
+    deps.map(_.map(_.trim)).filter(_.value.nonEmpty)
+      .flatMap { posDepStr =>
+        val depStr = posDepStr.value
+        DependencyParser.parse(depStr) match {
+          case Left(err) =>
+            if (ignoreErrors) Nil
+            else sys.error(s"Error parsing dependency '$depStr': $err")
+          case Right(dep) => Seq(posDepStr.map(_ => dep))
+        }
+      }
 }
+ 

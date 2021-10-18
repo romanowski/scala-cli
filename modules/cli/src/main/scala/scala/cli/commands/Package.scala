@@ -34,6 +34,8 @@ import scala.cli.internal.{GetImageResizer, ScalaJsLinker}
 import scala.scalanative.util.Scope
 import scala.scalanative.{build => sn}
 import scala.util.Properties
+import os.truncate
+import dependency.AnyDependency
 
 object Package extends ScalaCommand[PackageOptions] {
   override def group                                  = "Main"
@@ -162,7 +164,7 @@ object Package extends ScalaCommand[PackageOptions] {
         if (force) os.write.over(destPath, content)
         else os.write(destPath, content)
       case PackageType.Assembly =>
-        assembly(build, destPath, value(mainClass), () => alreadyExistsCheck())
+        assembly(logger, build, destPath, value(mainClass), () => alreadyExistsCheck())
 
       case PackageType.Js =>
         buildJs(build, destPath, value(mainClass))
@@ -468,6 +470,7 @@ object Package extends ScalaCommand[PackageOptions] {
   }
 
   private def assembly(
+    logger: Logger,
     build: Build.Successful,
     destPath: os.Path,
     mainClass: String,
@@ -488,9 +491,47 @@ object Package extends ScalaCommand[PackageOptions] {
     val preamble = Preamble()
       .withOsKind(Properties.isWin)
       .callsItself(Properties.isWin)
+
+
+    val excludes = build.options.packageOptions.assemblyOptions.assemblyExcludes
+    val artifacts = if (excludes.isEmpty) ??? else {
+      println(build.options.packageOptions.assemblyOptions)
+      def shouldExclude(lib: AnyDependency) = {
+        def check(value: String, expected: String): Boolean = expected match {
+          case "*" => true
+          case _ => expected == value
+        }
+        
+        excludes.exists { e =>
+            println(
+              Seq(
+                (lib.module.organization, e.value.module.organization),
+                (lib.module.name, e.value.module.name),
+                (lib.version, e.value.version)
+              )
+            )
+
+            check(lib.module.organization, e.value.module.organization) &&
+            check(lib.module.name, e.value.module.name) &&
+            check(lib.version, e.value.version)
+        }
+      }
+      val newLibraries = build.options.classPathOptions.extraDependencies.filterNot(d => shouldExclude(d.value))
+      println(build.options.classPathOptions.extraDependencies.map(_.value.module))
+      build.options.copy(classPathOptions = build.options.classPathOptions.copy(extraDependencies =  newLibraries)).artifacts(logger) match {
+        case Left(value) => 
+          println(value)
+          ???
+        case Right(v) =>
+          v
+      }
+    }
+
+    println(s"#### Adding class path ${artifacts.artifacts.mkString("\n")}")
+
     val params = Parameters.Assembly()
       .withExtraZipEntries(byteCodeZipEntries)
-      .withFiles(build.artifacts.artifacts.map(_._2.toFile))
+      .withFiles(artifacts.artifacts.map(_._2.toFile))
       .withMainClass(mainClass)
       .withPreamble(preamble)
     alreadyExistsCheck()

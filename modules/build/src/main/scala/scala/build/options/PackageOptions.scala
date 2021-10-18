@@ -1,6 +1,16 @@
 package scala.build.options
 
 import scala.build.internal.Constants
+import scala.build.Positioned
+import dependency._
+case class AssemblyOptions(
+  assemblyExcludes: Seq[Positioned[AnyDependency]] = Nil
+)
+
+object AssemblyOptions {
+  implicit val hasHashData: HasHashData[AssemblyOptions] = HasHashData.derive
+  implicit val monoid: ConfigMonoid[AssemblyOptions]     = ConfigMonoid.derive
+}
 
 final case class PackageOptions(
   standalone: Option[Boolean] = None,
@@ -14,7 +24,8 @@ final case class PackageOptions(
   debianOptions: DebianOptions = DebianOptions(),
   windowsOptions: WindowsOptions = WindowsOptions(),
   redHatOptions: RedHatOptions = RedHatOptions(),
-  dockerOptions: DockerOptions = DockerOptions()
+  dockerOptions: DockerOptions = DockerOptions(),
+  assemblyOptions: AssemblyOptions = AssemblyOptions()
 ) {
 
   def packageVersion: String =

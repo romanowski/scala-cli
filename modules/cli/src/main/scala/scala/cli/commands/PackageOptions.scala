@@ -4,8 +4,12 @@ import caseapp._
 import caseapp.core.help.Help
 
 import scala.build.options._
+import scala.build.Positioned
+import dependency._
+
 
 // format: off
+
 @HelpMessage("Compile and package Scala code")
 final case class PackageOptions(
   @Recurse
@@ -55,6 +59,9 @@ final case class PackageOptions(
   @Group("Package")
   @HelpMessage("Build docker image")
     docker: Boolean = false,
+  @Group("Package")
+  @HelpMessage("Excludes dependencies from web assembly")
+    assemblyExcludes: List[String] = Nil
 ) {
   // format: on
   def packageTypeOpt: Option[PackageType] =
@@ -105,6 +112,10 @@ final case class PackageOptions(
           imageRepository = packager.dockerImageRepository,
           imageTag = packager.dockerImageTag,
           isDockerEnabled = Some(docker)
+        ),
+        assemblyOptions = AssemblyOptions(
+          assemblyExcludes = 
+            SharedOptions.parseDependencies(assemblyExcludes.map(Positioned.none(_)), false),
         )
       )
     )
