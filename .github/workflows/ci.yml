@@ -28,7 +28,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Copy launcher
@@ -59,7 +59,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Generate native launcher
@@ -89,7 +89,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Generate native launcher
@@ -129,7 +129,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Generate native launcher
@@ -154,7 +154,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Test cookbooks
@@ -169,7 +169,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Check native-image config format
@@ -193,7 +193,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
         apps: scalafmt:3.0.0
@@ -208,7 +208,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: Check that reference doc is up-to-date
@@ -230,7 +230,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - run: ./mill -i ci.copyVcRedist
@@ -251,7 +251,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - name: GPG setup
@@ -277,7 +277,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - run: ./mill -i ci.setShouldPublish
@@ -302,7 +302,7 @@ jobs:
           fetch-depth: 0
           submodules: true
       - uses: coursier/cache-action@v6.3
-      - uses: coursier/setup-action@v1.1.1
+      - uses: coursier/setup-action@v1.1.2
         with:
           jvm: 8
       - uses: actions/download-artifact@v2
@@ -347,7 +347,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - run: ./mill -i ci.setShouldPublish
@@ -373,7 +373,7 @@ jobs:
         fetch-depth: 0
         submodules: true
     - uses: coursier/cache-action@v6.3
-    - uses: coursier/setup-action@v1.1.1
+    - uses: coursier/setup-action@v1.1.2
       with:
         jvm: 8
     - uses: actions/setup-node@v2.4.1
