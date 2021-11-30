@@ -1,0 +1,31 @@
+name: Website deploy
+on:
+  push:
+    branches:
+    - stable
+    - test
+
+jobs:
+  website-nightly:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        submodules: true
+    # - run: .github/scripts/update-website.sh
+    #   env:
+    #     GIT_USER: Virtuslab
+    #     DEPLOYMENT_BRANCH: gh-pages
+    #     GIT_PASS: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create Pull Request to develop with changes
+      uses: repo-sync/pull-request@v2
+      with:
+        destination_branch: "master"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        pr_title: "Back port of documentation changes to master"
+        name: Update stable branch
+    - uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: stable
