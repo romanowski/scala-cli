@@ -143,7 +143,7 @@ object BloopServer {
 
   def bsp(
     config: BloopRifleConfig,
-    workspace: Path,
+    buildDirectory: Path,
     threads: BloopThreads,
     logger: BloopRifleLogger,
     period: FiniteDuration,
@@ -153,10 +153,10 @@ object BloopServer {
     val bloopInfo = ensureBloopRunning(config, threads.startServerChecks, logger)
 
     logger.debug("Opening BSP connection with bloop")
-    Files.createDirectories(workspace.resolve(".scala/.bloop"))
+    Files.createDirectories(buildDirectory.resolve(".bloop"))
     val conn = BloopRifle.bsp(
       config,
-      workspace.resolve(".scala"),
+      buildDirectory,
       logger
     )
     logger.debug(s"Bloop BSP connection waiting at ${conn.address}")
@@ -172,7 +172,7 @@ object BloopServer {
     config: BloopRifleConfig,
     clientName: String,
     clientVersion: String,
-    workspace: Path,
+    buildDirectory: Path,
     classesDir: Path,
     buildClient: bsp4j.BuildClient,
     threads: BloopThreads,
@@ -180,7 +180,7 @@ object BloopServer {
   ): BloopServer = {
 
     val (conn, socket, bloopInfo) =
-      bsp(config, workspace, threads, logger, config.period, config.timeout)
+      bsp(config, buildDirectory, threads, logger, config.period, config.timeout)
 
     logger.debug(s"Connected to Bloop via BSP at ${conn.address}")
 
@@ -207,7 +207,7 @@ object BloopServer {
       clientName,
       clientVersion,
       Constants.bspVersion,
-      workspace.resolve(".scala").toUri.toASCIIString,
+      buildDirectory.toUri.toASCIIString,
       new bsp4j.BuildClientCapabilities(List("scala", "java").asJava)
     )
     val bloopExtraParams = new BloopExtraBuildParams
@@ -229,7 +229,7 @@ object BloopServer {
     config: BloopRifleConfig,
     clientName: String,
     clientVersion: String,
-    workspace: Path,
+    buildDirectory: Path,
     classesDir: Path,
     buildClient: bsp4j.BuildClient,
     threads: BloopThreads,
@@ -241,7 +241,7 @@ object BloopServer {
         config,
         clientName,
         clientVersion,
-        workspace,
+        buildDirectory,
         classesDir,
         buildClient,
         threads,

@@ -19,6 +19,7 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success}
+import java.io.PrintStream
 
 final class BspImpl(
   logger: Logger,
@@ -329,7 +330,7 @@ final class BspImpl(
       bloopRifleConfig,
       "scala-cli",
       Constants.version,
-      inputs.workspace.toNIO,
+      inputs.buildDirectory.toNIO,
       classesDir.toNIO,
       localClient,
       threads.buildThreads.bloop,
@@ -386,6 +387,12 @@ final class BspImpl(
         "Listening to incoming JSONRPC BSP requests."
     }
     val f = launcher.startListening()
+
+    if (verbosity > -1) {
+      // Redirect error to file
+      val out = inputs.buildDirectory / inputs.projectName / "bsp.log"
+      System.setErr(new PrintStream(out.toNIO.toFile))
+    }
 
     val initiateFirstBuild: Runnable = { () =>
       try build(actualLocalServer, remoteServer, actualLocalClient, notifyChanges = false, logger)

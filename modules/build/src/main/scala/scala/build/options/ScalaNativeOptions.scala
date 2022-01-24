@@ -6,6 +6,7 @@ import dependency._
 import java.nio.file.Paths
 
 import scala.build.internal.Constants
+import scala.build.Inputs
 import scala.scalanative.{build => sn}
 
 final case class ScalaNativeOptions(
@@ -21,7 +22,7 @@ final case class ScalaNativeOptions(
 ) {
 
   def nativeWorkDir(root: os.Path, projectName: String): os.Path =
-    root / ".scala" / projectName / "native"
+    root / Inputs.buildDirName / projectName / "native"
 
   def finalVersion = version.map(_.trim).filter(_.nonEmpty).getOrElse(Constants.scalaNativeVersion)
 

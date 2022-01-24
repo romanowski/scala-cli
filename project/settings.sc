@@ -12,6 +12,7 @@ import java.util.zip.{GZIPInputStream, ZipFile}
 import mill._, scalalib._
 import scala.collection.JavaConverters._
 import scala.util.Properties
+import java.util.concurrent.TimeUnit
 
 private def isCI = System.getenv("CI") != null
 
@@ -730,7 +731,21 @@ trait ScalaCliCompile extends ScalaModule {
             sourceFiles.map(_.path)
           )
 
-          val compile = proc.call()
+          // used to debug compilation problems
+          val buildScript = os.pwd / "out" / s"build_${artifactName()}.sh"
+          os.write.over(buildScript, proc.command.flatMap(_.value).map(v => s"'$v'").mkString(" "))
+          os.perms.set(buildScript, "rwxr-xr-x")
+         
+
+          val compile = 
+            try proc.call()
+            catch {
+              case e: Throwable =>
+                println(s"In case of missing output debug by running: $buildScript")
+                // Allow all logs to be passed to the stdout
+                TimeUnit.MILLISECONDS.sleep(500)
+                throw e
+            }
           val out     = compile.out.trim
           os.Path(out.split(File.pathSeparator).head)
         }

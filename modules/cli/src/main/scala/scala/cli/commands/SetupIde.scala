@@ -92,7 +92,7 @@ object SetupIde extends ScalaCommand[SetupIdeOptions] {
       value(downloadDeps(inputs, options.buildOptions, logger))
 
     val (bspName, bspJsonDestination) = options.bspFile.bspDetails(inputs.workspace)
-    val scalaCliBspJsonDestination    = inputs.workspace / ".scala" / "ide-options.json"
+    val scalaCliBspJsonDestination    = inputs.buildDirectory / "ide-options.json"
 
     // Ensure the path to the CLI is absolute
     val absolutePathToScalaCli: String = {

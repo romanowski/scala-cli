@@ -19,6 +19,8 @@ final case class Inputs(
   mayAppendHash: Boolean
 ) {
 
+  def buildDirectory = workspace / Inputs.buildDirName
+
   def isEmpty: Boolean =
     elements.isEmpty
 
@@ -103,7 +105,7 @@ final case class Inputs(
     else copy(elements = elements ++ extraElements)
 
   def generatedSrcRoot(scope: Scope): os.Path =
-    workspace / ".scala" / projectName / "src_generated" / scope.name
+    workspace / Inputs.buildDirName / projectName / "src_generated" / scope.name
 
   private def inHomeDir(directories: Directories): Inputs =
     copy(
@@ -197,6 +199,8 @@ object Inputs {
       extends Virtual with Compiled
   final case class VirtualData(content: Array[Byte], source: String)
       extends Virtual
+
+  val buildDirName = ".scala_build"
 
   private def inputsHash(elements: Seq[Element]): String = {
     def bytes(s: String): Array[Byte] = s.getBytes(StandardCharsets.UTF_8)

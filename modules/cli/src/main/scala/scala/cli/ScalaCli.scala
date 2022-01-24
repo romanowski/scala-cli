@@ -11,6 +11,7 @@ import java.nio.file.InvalidPathException
 import scala.cli.commands._
 import scala.cli.internal.Argv0
 import scala.util.Properties
+import scala.build.Inputs
 
 object ScalaCli extends CommandsEntryPoint {
 
@@ -115,7 +116,7 @@ object ScalaCli extends CommandsEntryPoint {
     catch {
       case e: Throwable if !isCI =>
         val workspace = CurrentParams.workspaceOpt.getOrElse(os.pwd)
-        val dir       = workspace / ".scala" / "stacktraces"
+        val dir       = workspace / Inputs.buildDirName / "stacktraces"
         os.makeDir.all(dir)
         import java.time.Instant
 

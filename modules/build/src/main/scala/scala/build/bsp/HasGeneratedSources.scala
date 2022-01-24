@@ -3,6 +3,7 @@ package scala.build.bsp
 import ch.epfl.scala.{bsp4j => b}
 
 import scala.build.GeneratedSource
+import scala.build.Inputs
 import scala.build.options.Scope
 
 trait HasGeneratedSources {
@@ -59,6 +60,6 @@ object HasGeneratedSources {
     var targetUriOpt: Option[String] = None
   ) {
     targetUriOpt =
-      Some((bloopWorkspace / ".scala").toIO.toURI.toASCIIString.stripSuffix("/") + "/?id=" + name)
+      Some((bloopWorkspace / Inputs.buildDirName).toIO.toURI.toASCIIString.stripSuffix("/") + "/?id=" + name)
   }
 }

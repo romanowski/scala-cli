@@ -6,4 +6,7 @@ ROOT_DIR="$SCRIPT_DIR"
    cd "$ROOT_DIR" || exit
    ./mill cli.standaloneLauncher
 )
-exec "$ROOT_DIR/out/cli/standaloneLauncher/dest/launcher" "$@"
+
+echo ala > error.txt
+
+"$ROOT_DIR/out/cli/standaloneLauncher/dest/launcher" "$@" 2> error.txt
