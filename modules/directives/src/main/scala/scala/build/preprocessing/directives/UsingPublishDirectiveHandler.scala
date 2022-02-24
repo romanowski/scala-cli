@@ -1,10 +1,8 @@
 package scala.build.preprocessing.directives
 
-import scala.build.EitherCps.{either, value}
 import scala.build.Logger
 import scala.build.errors.{BuildException, UnexpectedDirectiveError}
 import scala.build.options.{BuildOptions, PostBuildOptions, PublishOptions}
-import scala.build.preprocessing.ScopePath
 
 case object UsingPublishDirectiveHandler extends UsingDirectiveHandler {
 
@@ -50,13 +48,14 @@ case object UsingPublishDirectiveHandler extends UsingDirectiveHandler {
     "gpg-options"
   ).map(prefix + _)
 
+  override def getValueNumberBounds(key: String) = UsingDirectiveValueNumberBounds(1, 1)
+
   def handleValues(
-    directive: StrictDirective,
-    path: Either[String, os.Path],
-    cwd: ScopePath,
+    scopedDirective: ScopedDirective,
     logger: Logger
   ): Either[BuildException, ProcessedUsingDirective] = either {
-    val singleValue = DirectiveUtil.singleStringValue(directive, path, cwd)
+    // This head is fishy!
+    val singleValue = groupedScopedValuesContainer.scopedStringValues.head.positioned
 
     if (!directive.key.startsWith(prefix))
       value(Left(new UnexpectedDirectiveError(directive.key)))
@@ -92,7 +91,6 @@ case object UsingPublishDirectiveHandler extends UsingDirectiveHandler {
       notForBloopOptions = PostBuildOptions(
         publishOptions = publishOptions
       )
-    )
-    ProcessedDirective(Some(options), Seq.empty)
-  }
+      ProcessedDirective(Some(options), Seq.empty)
+    }
 }
