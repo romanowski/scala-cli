@@ -21,4 +21,14 @@ trait DirectiveHandler[T] {
     logger: Logger
   ): Either[BuildException, ProcessedDirective[T]]
 
+
+  // Move logic of validation of values here based on methods like this one:
+  // Bascally code that sits in UsingDirctivesUtils
+
+  def supportedTypes: ... =
+  
+  def singleValue = true
+
+  def canBeEmpty= false
+
 }

@@ -241,6 +241,7 @@ object GenerateReferenceDoc extends CaseApp[Options] {
         |""".stripMargin
     )
 
+    /** A method that generates a documentation for each of the handler */
     def addHandlers(handlers: Seq[DirectiveHandler[_]]): Unit =
       for (handler <- handlers.sortBy(_.name)) {
         b.append(
