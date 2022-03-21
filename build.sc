@@ -34,7 +34,7 @@ implicit def millModuleBasePath: define.BasePath =
   define.BasePath(super.millModuleBasePath.value / "modules")
 
 object cli            extends Cli
-object `build-macros` extends Cross[BuildMacros](Scala.defaultInternal)
+object `build-macros` extends Cross[BuildMacros](Scala.defaultInternal, Scala.scala3)
 object build          extends Cross[Build](Scala.defaultInternal)
 object runner         extends Cross[Runner](Scala.all: _*)
 object `test-runner`  extends Cross[TestRunner](Scala.all: _*)
@@ -167,10 +167,14 @@ class BuildMacros(val crossScalaVersion: String) extends ScalaCliCrossSbtModule
   def scalacOptions = T {
     super.scalacOptions() ++ Seq("-Ywarn-unused")
   }
-  def compileIvyDeps = T {
-    super.compileIvyDeps() ++ Agg(
-      Deps.scalaReflect(scalaVersion())
-    )
+
+    def compileIvyDeps = T {
+      if (scalaVersion().startsWith("3")) 
+        super.compileIvyDeps() 
+      else
+        super.compileIvyDeps() ++ Agg(
+          Deps.scalaReflect(scalaVersion())
+        )
   }
 }
 

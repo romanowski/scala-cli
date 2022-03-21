@@ -8,7 +8,7 @@ import scala.build.preprocessing.ScopePath
 import scala.build.{Logger, Positioned}
 import scala.util.{Success, Try}
 
-case object UsingScalaJsOptionsDirectiveHandler extends UsingDirectiveHandler {
+case object UsingScalaJsOptionsDirectiveHandlershapeless extends UsingDirectiveHandler {
 
   def name: String = "Scala JS options"
 

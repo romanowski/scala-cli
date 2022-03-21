@@ -1,0 +1,3 @@
+Scala CLI version 0.1.2-SNAPSHOT
+Your Scala CLI version is outdated. The newest version is 0.1.2
+It is recommended that you update Scala CLI through the same tool or method you used for its initial installation for avoiding the creation of outdated duplicates.
