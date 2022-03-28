@@ -53,43 +53,49 @@ case object UsingPublishDirectiveHandler extends UsingDirectiveHandler {
   def handleValues(
     scopedDirective: ScopedDirective,
     logger: Logger
-  ): Either[BuildException, ProcessedUsingDirective] = either {
+  ): Either[BuildException, ProcessedUsingDirective] = checkIfValuesAreExpected(scopedDirective).flatMap { groupedScopedValuesContainer =>
     // This head is fishy!
-    val singleValue = groupedScopedValuesContainer.scopedStringValues.head.positioned
+    val publishValue = groupedScopedValuesContainer.scopedStringValues.head.positioned
 
-    if (!directive.key.startsWith(prefix))
-      value(Left(new UnexpectedDirectiveError(directive.key)))
-
-    val publishOptions = directive.key.stripPrefix(prefix) match {
-      case "organization" =>
-        PublishOptions(organization = Some(value(singleValue)))
-      case "name" =>
-        PublishOptions(name = Some(value(singleValue)))
-      case "version" =>
-        PublishOptions(version = Some(value(singleValue)))
-      case "url" =>
-        PublishOptions(url = Some(value(singleValue)))
-      case "license" =>
-        val license = value(PublishOptions.parseLicense(value(singleValue)))
-        PublishOptions(license = Some(license))
-      case "versionControl" | "version-control" | "scm" =>
-        PublishOptions(versionControl = Some(value(PublishOptions.parseVcs(value(singleValue)))))
-      case "description" =>
-        PublishOptions(description = Some(value(singleValue).value))
-      case "developer" =>
-        PublishOptions(developers = Seq(value(PublishOptions.parseDeveloper(value(singleValue)))))
-      case "scalaVersionSuffix" | "scala-version-suffix" =>
-        PublishOptions(scalaVersionSuffix = Some(value(singleValue).value))
-      case "scalaPlatformSuffix" | "scala-platform-suffix" =>
-        PublishOptions(scalaPlatformSuffix = Some(value(singleValue).value))
-      case "repository" =>
-        PublishOptions(repository = Some(value(singleValue).value))
-      case _ =>
-        value(Left(new UnexpectedDirectiveError(directive.key)))
-    }
-    val options = BuildOptions(
-      notForBloopOptions = PostBuildOptions(
-        publishOptions = publishOptions
+     if (!scopedDirective.directive.key.startsWith(prefix))
+        Left(new UnexpectedDirectiveError(scopedDirective.directive.key))
+      else scopedDirective.directive.key.stripPrefix(prefix) match {
+        case "organization" =>
+          Right(PublishOptions(organization = Some(publishValue)))
+        case "name" =>
+          Right(PublishOptions(name = Some(publishValue)))
+        case "version" =>
+          Right(PublishOptions(version = Some(publishValue)))
+        case "url" =>
+          Right(PublishOptions(url = Some(publishValue)))
+        case "license" =>
+          PublishOptions.parseLicense(publishValue).map { license =>
+            PublishOptions(license = Some(license))
+          }
+        case "versionControl" | "version-control" | "scm" =>
+          PublishOptions.parseVcs(publishValue).map { versionControl =>
+            PublishOptions(versionControl = Some(versionControl))
+          }
+        case "description" =>
+          Right(PublishOptions(description = Some(publishValue.value)))
+        case "developer" =>
+          PublishOptions.parseDeveloper(publishValue).map { developer =>
+            PublishOptions(developers = Seq(developer))
+          }
+        case "scalaVersionSuffix" | "scala-version-suffix" =>
+          Right(PublishOptions(scalaVersionSuffix = Some(publishValue.value)))
+        case "scalaPlatformSuffix" | "scala-platform-suffix" =>
+          Right(PublishOptions(scalaPlatformSuffix = Some(publishValue.value)))
+        case "repository" =>
+          Right(PublishOptions(repository = Some(publishValue.value)))
+        case _ =>
+          Left(new UnexpectedDirectiveError(scopedDirective.directive.key))
+      }
+    }.map { publishOptions =>
+      val options = BuildOptions(
+        notForBloopOptions = PostBuildOptions(
+          publishOptions = publishOptions
+        )
       )
       ProcessedDirective(Some(options), Seq.empty)
     }
