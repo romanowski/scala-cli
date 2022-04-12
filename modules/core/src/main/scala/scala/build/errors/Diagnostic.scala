@@ -4,6 +4,7 @@ import scala.build.Position
 
 trait Diagnostic {
   def message: String
+  def action: String
   def severity: Severity
   def positions: Seq[Position]
 }
@@ -17,12 +18,14 @@ object Diagnostic {
   private case class ADiagnostic(
     message: String,
     severity: Severity,
-    positions: Seq[Position]
+    positions: Seq[Position],
+    action: String
   ) extends Diagnostic
 
   def apply(
     message: String,
     severity: Severity,
-    positions: Seq[Position] = Nil
-  ): Diagnostic = ADiagnostic(message, severity, positions)
+    positions: Seq[Position] = Nil,
+    action: String = ""
+  ): Diagnostic = ADiagnostic(message, severity, positions, action)
 }

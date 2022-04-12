@@ -8,4 +8,6 @@ abstract class BuildException(
   cause: Throwable = null
 ) extends Exception(message, cause) with Diagnostic {
   final override def severity: Severity = Severity.Error
+
+  def action = ""
 }

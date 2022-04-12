@@ -28,6 +28,7 @@ class CliLogger(
         d.positions,
         d.severity,
         d.message,
+        d.action,
         hashMap
       )
     }
@@ -52,6 +53,7 @@ class CliLogger(
     positions: Seq[Position],
     severity: Severity,
     message: String,
+    action: String,
     contentCache: mutable.Map[os.Path, Seq[String]]
   ) =
     if (positions.isEmpty)
@@ -86,7 +88,8 @@ class CliLogger(
         ConsoleBloopBuildClient.printFileDiagnostic(
           this,
           f.path,
-          diag
+          diag,
+          action
         )
       }
 
@@ -96,6 +99,7 @@ class CliLogger(
           message,
           severity,
           otherPositions
+          // TODO add action here as well
         )
     }
 
@@ -110,7 +114,7 @@ class CliLogger(
         for (ex <- c.exceptions)
           printEx(ex, contentCache)
       case _ =>
-        printDiagnostic(ex.positions, Severity.Error, ex.getMessage(), contentCache)
+        printDiagnostic(ex.positions, Severity.Error, ex.getMessage(), ex.action, contentCache)
     }
 
   def log(ex: BuildException): Unit =

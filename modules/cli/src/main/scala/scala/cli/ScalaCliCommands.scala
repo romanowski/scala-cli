@@ -28,6 +28,7 @@ class ScalaCliCommands(
     Directories,
     Doctor,
     Export,
+    Fix,
     Fmt,
     new HelpCmd(help),
     InstallCompletions,

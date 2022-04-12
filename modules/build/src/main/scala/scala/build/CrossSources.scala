@@ -82,86 +82,88 @@ object CrossSources {
     inputs: Inputs,
     preprocessors: Seq[Preprocessor],
     logger: Logger
-  ): Either[BuildException, CrossSources] = either {
+  ): Either[BuildException, CrossSources] = {
+    val base: Either[BuildException, CrossSources] = either {
+      val preprocessedSources = value {
+        inputs.flattened()
+          .map { elem =>
+            preprocessors
+              .iterator
+              .flatMap(p => p.preprocess(elem, logger).iterator)
+              .take(1)
+              .toList
+              .headOption
+              .getOrElse(Right(Nil)) // FIXME Warn about unprocessed stuff?
+          }
+          .sequence
+          .left.map(CompositeBuildException(_))
+          .map(_.flatten)
+      }
 
-    val preprocessedSources = value {
-      inputs.flattened()
-        .map { elem =>
-          preprocessors
-            .iterator
-            .flatMap(p => p.preprocess(elem, logger).iterator)
-            .take(1)
-            .toList
-            .headOption
-            .getOrElse(Right(Nil)) // FIXME Warn about unprocessed stuff?
-        }
-        .sequence
-        .left.map(CompositeBuildException(_))
-        .map(_.flatten)
-    }
+      val scopedRequirements       = preprocessedSources.flatMap(_.scopedRequirements)
+      val scopedRequirementsByRoot = scopedRequirements.groupBy(_.path.root)
+      def baseReqs(path: ScopePath): BuildRequirements = {
+        val fromDirectives =
+          scopedRequirementsByRoot
+            .getOrElse(path.root, Nil)
+            .flatMap(_.valueFor(path).toSeq)
+            .foldLeft(BuildRequirements())(_ orElse _)
 
-    val scopedRequirements       = preprocessedSources.flatMap(_.scopedRequirements)
-    val scopedRequirementsByRoot = scopedRequirements.groupBy(_.path.root)
-    def baseReqs(path: ScopePath): BuildRequirements = {
-      val fromDirectives =
-        scopedRequirementsByRoot
-          .getOrElse(path.root, Nil)
-          .flatMap(_.valueFor(path).toSeq)
-          .foldLeft(BuildRequirements())(_ orElse _)
-
-      // Scala-cli treats all `.test.scala` files tests as well as
-      // files from witin `test` subdirectory from provided input directories
-      // If file has `using target <scope>` directive this take precendeces.
-      if (
-        fromDirectives.scope.isEmpty &&
-        (path.path.last.endsWith(".test.scala") || withinTestSubDirectory(path, inputs))
-      )
-        fromDirectives.copy(scope = Some(BuildRequirements.ScopeRequirement(Scope.Test)))
-      else fromDirectives
-    }
-
-    val buildOptions = for {
-      s   <- preprocessedSources
-      opt <- s.options.toSeq
-      if opt != BuildOptions()
-    } yield {
-      val baseReqs0 = baseReqs(s.scopePath)
-      HasBuildRequirements(
-        s.requirements.fold(baseReqs0)(_ orElse baseReqs0),
-        opt
-      )
-    }
-
-    val mainClassOpt = for {
-      mainClassPath      <- inputs.mainClassElement.map(_.path).map(ScopePath.fromPath(_).path)
-      processedMainClass <- preprocessedSources.find(_.scopePath.path == mainClassPath)
-      mainClass          <- processedMainClass.mainClassOpt
-    } yield mainClass
-
-    val paths = preprocessedSources.collect {
-      case d: PreprocessedSource.OnDisk =>
-        val baseReqs0 = baseReqs(d.scopePath)
-        HasBuildRequirements(
-          d.requirements.fold(baseReqs0)(_ orElse baseReqs0),
-          (d.path, d.path.relativeTo(inputs.workspace))
+        // Scala-cli treats all `.test.scala` files tests as well as
+        // files from witin `test` subdirectory from provided input directories
+        // If file has `using target <scope>` directive this take precendeces.
+        if (
+          fromDirectives.scope.isEmpty &&
+          (path.path.last.endsWith(".test.scala") || withinTestSubDirectory(path, inputs))
         )
-    }
-    val inMemory = preprocessedSources.collect {
-      case m: PreprocessedSource.InMemory =>
-        val baseReqs0 = baseReqs(m.scopePath)
+          fromDirectives.copy(scope = Some(BuildRequirements.ScopeRequirement(Scope.Test)))
+        else fromDirectives
+      }
+
+      val buildOptions = for {
+        s   <- preprocessedSources
+        opt <- s.options.toSeq
+        if opt != BuildOptions()
+      } yield {
+        val baseReqs0 = baseReqs(s.scopePath)
         HasBuildRequirements(
-          m.requirements.fold(baseReqs0)(_ orElse baseReqs0),
-          Sources.InMemory(m.originalPath, m.relPath, m.code, m.ignoreLen)
+          s.requirements.fold(baseReqs0)(_ orElse baseReqs0),
+          opt
         )
+      }
+
+      val mainClassOpt = for {
+        mainClassPath      <- inputs.mainClassElement.map(_.path).map(ScopePath.fromPath(_).path)
+        processedMainClass <- preprocessedSources.find(_.scopePath.path == mainClassPath)
+        mainClass          <- processedMainClass.mainClassOpt
+      } yield mainClass
+
+      val paths = preprocessedSources.collect {
+        case d: PreprocessedSource.OnDisk =>
+          val baseReqs0 = baseReqs(d.scopePath)
+          HasBuildRequirements(
+            d.requirements.fold(baseReqs0)(_ orElse baseReqs0),
+            (d.path, d.path.relativeTo(inputs.workspace))
+          )
+      }
+      val inMemory = preprocessedSources.collect {
+        case m: PreprocessedSource.InMemory =>
+          val baseReqs0 = baseReqs(m.scopePath)
+          HasBuildRequirements(
+            m.requirements.fold(baseReqs0)(_ orElse baseReqs0),
+            Sources.InMemory(m.originalPath, m.relPath, m.code, m.ignoreLen)
+          )
+      }
+
+      val resourceDirs = inputs.elements.collect {
+        case r: Inputs.ResourceDirectory =>
+          HasBuildRequirements(BuildRequirements(), r.path)
+      } ++ preprocessedSources.flatMap(_.options).flatMap(_.classPathOptions.resourcesDir).map(
+        HasBuildRequirements(BuildRequirements(), _)
+      )
+
+      CrossSources(paths, inMemory, mainClassOpt, resourceDirs, buildOptions)
     }
-
-    val resourceDirs = inputs.elements.collect {
-      case r: Inputs.ResourceDirectory =>
-        HasBuildRequirements(BuildRequirements(), r.path)
-    } ++ preprocessedSources.flatMap(_.options).flatMap(_.classPathOptions.resourcesDir).map(
-      HasBuildRequirements(BuildRequirements(), _)
-    )
-
-    CrossSources(paths, inMemory, mainClassOpt, resourceDirs, buildOptions)
+    base.left.map(scala.build.actions.ActionManger.processActions)
   }
 }

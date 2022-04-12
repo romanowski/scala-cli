@@ -8,6 +8,7 @@ import scala.build.errors.{BuildException, CompositeBuildException, DependencyFo
 import scala.build.options.{BuildOptions, ScalaOptions}
 import scala.build.preprocessing.ScopePath
 import scala.build.{Logger, Positioned}
+import scala.build.Position
 
 case object UsingCompilerPluginDirectiveHandler extends UsingDirectiveHandler {
   def name        = "Compiler plugins"
@@ -19,7 +20,7 @@ case object UsingCompilerPluginDirectiveHandler extends UsingDirectiveHandler {
     "//> using plugin \"org.typelevel:::kind-projector:0.13.2\""
   )
 
-  private def parseDependency(depStr: String): Either[BuildException, AnyDependency] =
+  private def parseDependency(depStr: String, positions: Seq[Position]): Either[BuildException, AnyDependency] =
     DependencyParser.parse(depStr)
       .left.map(err => new DependencyFormatError(depStr, err))
 
@@ -39,7 +40,7 @@ case object UsingCompilerPluginDirectiveHandler extends UsingDirectiveHandler {
             // Really necessary? (might already be handled by the coursier-dependency library)
             val dep0 = dep.value.filter(!_.isSpaceChar)
 
-            parseDependency(dep0).map(Positioned(dep.positions, _))
+            parseDependency(dep0, dep.positions).map(Positioned(dep.positions, _))
         }
         .sequence
         .left.map(errors => CompositeBuildException(errors))

@@ -158,7 +158,8 @@ object ConsoleBloopBuildClient {
   def printFileDiagnostic(
     logger: Logger,
     path: Either[String, os.Path],
-    diag: bsp4j.Diagnostic
+    diag: bsp4j.Diagnostic,
+    actionString: String = ""
   ): Unit = {
     val isWarningOrError = diag.getSeverity == bsp4j.DiagnosticSeverity.ERROR ||
       diag.getSeverity == bsp4j.DiagnosticSeverity.WARNING
@@ -203,6 +204,8 @@ object ConsoleBloopBuildClient {
           prefix + " " * diag.getRange.getStart.getCharacter + "^" * len
         )
       }
+      if (actionString.nonEmpty) 
+        actionString.linesIterator.foreach(l => logger.message("[...] " + l))
     }
   }
 

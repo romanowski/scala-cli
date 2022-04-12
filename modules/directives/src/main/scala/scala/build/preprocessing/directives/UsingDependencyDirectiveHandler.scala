@@ -8,6 +8,7 @@ import scala.build.errors.{BuildException, CompositeBuildException, DependencyFo
 import scala.build.options.{BuildOptions, ClassPathOptions, ShadowingSeq}
 import scala.build.preprocessing.ScopePath
 import scala.build.{Logger, Positioned}
+import scala.build.Position
 
 case object UsingDependencyDirectiveHandler extends UsingDirectiveHandler {
   def name        = "Dependency"
@@ -21,9 +22,9 @@ case object UsingDependencyDirectiveHandler extends UsingDirectiveHandler {
     "//> using lib \"tabby:tabby:0.2.3,url=https://github.com/bjornregnell/tabby/releases/download/v0.2.3/tabby_3-0.2.3.jar\""
   )
 
-  private def parseDependency(depStr: String): Either[BuildException, AnyDependency] =
+  private def parseDependency(depStr: String, pos: Seq[Position]): Either[BuildException, AnyDependency] =
     DependencyParser.parse(depStr)
-      .left.map(err => new DependencyFormatError(depStr, err))
+      .left.map(err => new DependencyFormatError(depStr, err, positions = pos))
 
   def keys = Seq("lib", "libs")
   def handleValues(
@@ -38,9 +39,9 @@ case object UsingDependencyDirectiveHandler extends UsingDirectiveHandler {
         .map {
           case (dep, _) =>
             // Really necessary? (might already be handled by the coursier-dependency library)
-            val dep0 = dep.value.filter(!_.isSpaceChar)
+            val depString = dep.value.filter(!_.isSpaceChar)
 
-            parseDependency(dep0).map(Positioned(dep.positions, _))
+            parseDependency(depString, dep.positions).map(Positioned(dep.positions, _))
         }
         .sequence
         .left.map(errors => CompositeBuildException(errors))
@@ -56,3 +57,4 @@ case object UsingDependencyDirectiveHandler extends UsingDirectiveHandler {
     )
   }
 }
+
