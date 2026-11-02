@@ -1,0 +1,148 @@
+load("@rules_java//java:java_library.bzl", "java_library")
+load("//bazel:defs.bzl", "scala_cli_binary", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+
+scala_cli_constants(
+    name = "constants",
+    out = "Constants.scala",
+    template = "//bazel:constants/cli.scala.tpl",
+)
+
+scala_cli_constants(
+    name = "options_constants",
+    # Constants.scala, like Mill (the name ends up in the classes' SourceFile attribute)
+    out = "options_constants/Constants.scala",
+    template = "//bazel:constants/cli-options.scala.tpl",
+)
+
+# `cli[].defaultFilesResources` in build.mill
+genrule(
+    name = "default_files",
+    srcs = [
+        "@default_workflow_ci_yml//file",
+        "@default_workflow_gitignore//file",
+    ],
+    outs = [
+        "default_files/scala/cli/commands/publish/workflows/default.yml",
+        "default_files/scala/cli/commands/publish/gitignore",
+    ],
+    cmd = " && ".join([
+        "sed 's| ./scala-cli| scala-cli|g' $(location @default_workflow_ci_yml//file) > $(location default_files/scala/cli/commands/publish/workflows/default.yml)",
+        "cp $(location @default_workflow_gitignore//file) $(location default_files/scala/cli/commands/publish/gitignore)",
+    ]),
+)
+
+java_library(
+    name = "default_files_resources",
+    resource_strip_prefix = package_name() + "/default_files",
+    resources = [":default_files"],
+)
+
+# `cli` in build.mill
+scala_cli_library(
+    name = "cli",
+    srcs = glob([
+        "src/main/scala/**/*.scala",
+        "src/main/java/**/*.java",
+    ]) + [
+        ":constants",
+        ":options_constants",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        # First on the class path: scala-compiler 2.13 (via semanticdb-shared) bundles an
+        # older copy of scala-asm's classes, and in a fat JAR / class path the first copy
+        # wins. Mill's class path has scala-asm first, which scala3-compiler 3.9 (via
+        # java-class-name) expects.
+        "@maven//:org_scala_lang_modules_scala_asm",
+        ":default_files_resources",
+        "//modules/build",
+        "//modules/config",
+        "//modules/specification-level",
+        "@maven//:ai_kien_python_native_libs_3",
+        "@maven//:ch_epfl_scala_scalafix_interfaces",
+        "@maven//:com_github_alexarchambault_case_app_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_core_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:com_google_jimfs_jimfs",
+        "@maven//:com_softwaremill_sttp_client3_core_3",
+        "@maven//:io_get_coursier_coursier_launcher_3",
+        "@maven//:io_get_coursier_jniutils_windows_jni_utils",
+        "@maven//:org_graalvm_nativeimage_svm",
+        "@maven//:org_scala_lang_scala_publish_3",
+        "@maven//:org_scalameta_metaconfig_typesafe_config_3",
+        "@maven//:org_slf4j_slf4j_nop",
+        "@maven//:org_virtuslab_scala_cli_libsodiumjni",
+        "@maven//:org_virtuslab_scala_cli_scala3_graal_3",
+        "@maven//:org_virtuslab_scala_cli_scala3_graal_processor_3",
+        "@maven//:org_virtuslab_scala_cli_signing_cli_3",
+        "@maven//:org_virtuslab_scala_packager_3",
+    ],
+)
+
+# `./mill -i scala …` / `./mill -i 'cli[]'.run …` (DEV.md)
+scala_cli_binary(
+    name = "scala-cli",
+    main_class = "scala.cli.ScalaCli",
+    runtime_deps = ["//bazel/local-repo"],
+    deps = [":cli"],
+)
+
+scala_cli_test(
+    name = "test",
+    # Required by the reflection usage in SetupScalaCLITests.scala
+    jvm_flags = ["--add-opens=java.base/java.util=ALL-UNNAMED"],
+    # Uses the global Bloop daemon: run alone, like Mill on CI.
+    tags = [
+        "exclusive",
+        "requires-network",
+    ],
+    timeout = "eternal",
+    runtime_deps = ["//bazel/local-repo"],
+    deps = [
+        ":cli",
+        "//modules/build:test-lib",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+    ],
+)
+
+# JVM launchers: self-contained JARs run with `java -jar`, `launchers/<kind>/scala-cli.jar`
+# (the `<name>_deploy.jar` without .tasty / .semanticdb files, like the `cliBootstrapped`
+# assembly rules in build.mill). `scala-cli.kind` is read from java-properties/scala-cli-properties.
+[
+    (
+        genrule(
+            name = "properties_" + kind,
+            outs = ["properties_%s/java-properties/scala-cli-properties" % kind],
+            cmd = "printf 'scala-cli.kind=%s' > $@" % kind,
+        ),
+        java_library(
+            name = "properties_%s_resources" % kind,
+            resource_strip_prefix = package_name() + "/properties_" + kind,
+            resources = [":properties_" + kind],
+        ),
+        scala_cli_binary(
+            name = name,
+            main_class = "scala.cli.ScalaCli",
+            visibility = ["//visibility:public"],
+            runtime_deps = [
+                ":properties_%s_resources" % kind,
+                "//bazel/local-repo",
+            ],
+            deps = [":cli"],
+        ),
+        genrule(
+            name = name + "-jar",
+            srcs = [":%s_deploy.jar" % name],
+            outs = ["launchers/%s/scala-cli.jar" % name.removeprefix("scala-cli-")],
+            cmd = "$(execpath //bazel/tools:filter_jar) $< $@ '.*\\.tasty' '.*\\.semanticdb'",
+            tools = ["//bazel/tools:filter_jar"],
+            visibility = ["//visibility:public"],
+        ),
+    )
+    for name, kind in [
+        # `cli[].standaloneLauncher` / `./mill -i copyJvmLauncher`
+        ("scala-cli-standalone", "jvm.standaloneLauncher"),
+        # `cliBootstrapped.jar` / `./mill -i copyJvmBootstrappedLauncher`
+        ("scala-cli-bootstrapped", "jvm.bootstrapped"),
+    ]
+]

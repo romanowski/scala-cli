@@ -1,0 +1,35 @@
+# Bazel build for Scala CLI (runs alongside Mill during the migration; see bazel/README.md)
+
+# Compilers / build tools run on JDK 21 (the svm compile-only dependency is Java 21 bytecode);
+# binaries and tests run on JDK 17, like Mill (Java.defaultJava, ScalaCliTests.jvmVersion).
+common --java_runtime_version=remotejdk_17
+common --tool_java_runtime_version=remotejdk_21
+common --java_language_version=17
+common --tool_java_language_version=17
+
+# Version / VCS values for the generated Constants.scala files (STABLE_ keys only).
+common --workspace_status_command=bazel/workspace_status.sh
+
+build --incompatible_strict_action_env
+# Mill compiles against the full transitive class path; do the same for Java.
+build --experimental_strict_java_deps=off
+test --test_output=errors
+
+# Local developer convenience: keep a disk cache across clean checkouts.
+common:local --disk_cache=~/.cache/bazel-disk
+
+# CI settings (GitHub Actions)
+common:ci --color=yes
+common:ci --curses=no
+common:ci --show_progress_rate_limit=10
+common:ci --disk_cache=~/.cache/bazel-disk
+common:ci --repository_cache=~/.cache/bazel-repo
+
+try-import %workspace%/user.bazelrc
+
+# Unit tests (ScalaCliTests.forkEnv in project/settings/package.mill).
+# Tests spawn JVMs / Bloop with JAVA_HOME, which Mill pins to Temurin 17. Pass a JDK 17
+# explicitly (CI does), or set it once in user.bazelrc:
+#   test --test_env=JAVA_HOME=/path/to/jdk17
+#   test --test_env=SCALA_CLI_TESTS_HOST_JAVA_HOME=/path/to/jdk17
+test --test_env="SCALA_CLI_EXTRA_TIMEOUT=120 seconds"

@@ -27,6 +27,7 @@ CODE=false; DOCS=false; CI=false; FORMAT_CONFIG=false; BENCHMARK=false; GIFS=fal
 while IFS= read -r file; do
   case "$file" in
     modules/*|build.mill|project/*|mill-build/*|mill-native-image|.gitmodules) CODE=true ;;
+    MODULE.bazel|maven_install.json|BUILD.bazel|.bazelrc|.bazelversion|bazel/*) CODE=true ;;
     website/*) DOCS=true ;;
     .github/release/release-procedure.md) : ;;
     .github/*) CI=true ;;

@@ -1,0 +1,7 @@
+load("//bazel:defs.bzl", "scala_cli_library")
+
+# `specification-level` in build.mill
+scala_cli_library(
+    name = "specification-level",
+    visibility = ["//visibility:public"],
+)

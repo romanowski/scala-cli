@@ -27,6 +27,7 @@ Cross-compilation: default `Scala.defaultInternal`; `[]` = default version, `[_]
 | `project/settings/package.mill` | Shared traits, utils (`HasTests`, `CliLaunchers`, `FormatNativeImageConf`, etc.)         |
 | `project/publish/package.mill`  | Publishing settings                                                                      |
 | `project/website/package.mill`  | Website-related build tasks                                                              |
+| `MODULE.bazel`, `BUILD.bazel`   | Experimental Bazel build alongside Mill; see [bazel/README.md](bazel/README.md)           |
 
 ### Essential commands
 

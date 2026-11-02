@@ -1,0 +1,55 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_scala//scala:scala.bzl", "scala_junit_test")
+load("//bazel:defs.bzl", "ALL_CLASSES", "TEST_JVM_FLAGS", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+
+scala_cli_constants(
+    name = "constants",
+    out = "Constants.scala",
+    template = "//bazel:constants/docs-tests.scala.tpl",
+)
+
+# `docs-tests` (main sources: sclicheck) in build.mill
+scala_cli_library(
+    name = "docs-tests",
+    srcs = glob(["src/main/scala/**/*.scala"]) + [":constants"],
+    deps = [
+        "@maven//:com_lihaoyi_fansi_3",
+        "@maven//:com_lihaoyi_os_lib_3",
+        "@maven//:com_lihaoyi_pprint_3",
+    ],
+)
+
+scala_cli_test(
+    name = "suites",
+    tags = ["manual"],
+    deps = [":docs-tests"],
+)
+
+scala_junit_test(
+    name = "test-runner",
+    jvm_flags = TEST_JVM_FLAGS,
+    suffixes = ALL_CLASSES,
+    tags = ["manual"],
+    tests_from = [":suites-lib"],
+    runtime_deps = [":suites-lib"],
+)
+
+# `./mill -i 'docs-tests[]'.test` (filter suites with --test_filter=sclicheck.DocTests)
+sh_test(
+    name = "test",
+    srcs = ["//bazel/tools:docs_test.sh"],
+    args = [
+        "$(rootpath :test-runner)",
+        "$(rootpath //modules/cli:scala-cli-standalone)",
+    ],
+    data = [
+        ":test-runner",
+        "//:docs_test_data",
+        "//modules/cli:scala-cli-standalone",
+    ],
+    tags = [
+        "no-sandbox",
+        "requires-network",
+    ],
+    timeout = "eternal",
+)

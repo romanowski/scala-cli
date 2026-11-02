@@ -1,0 +1,58 @@
+load("//bazel:defs.bzl", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+
+# `build-module` in build.mill (moduleDir = modules/build)
+scala_cli_library(
+    name = "build",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//modules/directives",
+        "//modules/options",
+        "//modules/scala-cli-bsp",
+        "//modules/tasty-lib",
+        "//modules/test-runner",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_core_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:com_lihaoyi_os_lib_3",
+        "@maven//:com_lihaoyi_pprint_3",
+        "@maven//:com_swoval_file_tree_views",
+        "@maven//:org_graalvm_nativeimage_svm",
+        "@maven//:org_ow2_asm_asm",
+        "@maven//:org_scala_js_scalajs_env_nodejs_3",
+        "@maven//:org_scala_js_scalajs_sbt_test_adapter_2_13",
+        "@maven//:org_scala_lang_modules_scala_collection_compat_3",
+        "@maven//:org_scala_native_test_runner_3",
+        "@maven//:org_scalameta_munit_diff_3",
+        "@maven//:org_scalameta_semanticdb_shared_2_13",
+        "@maven//:org_virtuslab_scala_cli_java_class_name_java_class_name_3",
+        "@maven//:org_virtuslab_scala_cli_zip_input_stream_zip_input_stream",
+        "@maven//:org_virtuslab_sloth_core_3",
+    ],
+)
+
+scala_cli_constants(
+    name = "test_constants",
+    out = "Constants2.scala",
+    rlocations = {"CS_RLOCATION": "//bazel/tools:cs"},
+    template = "//bazel:constants/build-test.scala.tpl",
+    testonly = True,
+)
+
+scala_cli_test(
+    name = "test",
+    srcs = glob(["src/test/scala/**/*.scala"]) + [":test_constants"],
+    data = ["//bazel/tools:cs"],
+    # Downloads Scala compilers / dependencies and uses the global Bloop daemon:
+    # run alone, like Mill on CI (testParallelism = !isCI).
+    tags = [
+        "exclusive",
+        "requires-network",
+    ],
+    timeout = "eternal",
+    runtime_deps = ["//bazel/local-repo"],
+    visibility = ["//modules/cli:__pkg__"],
+    deps = [
+        ":build",
+        "@maven//:com_lihaoyi_pprint_3",
+        "@maven//:org_slf4j_slf4j_nop",
+    ],
+)

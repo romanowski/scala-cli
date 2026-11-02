@@ -14,12 +14,13 @@ object TestUtil {
   abstract class ScalaCliSuite extends munit.FunSuite {
     extension (munitContext: BeforeEach | AfterEach) {
       def locationAbsolutePath: os.Path =
-        os.Path {
+        os.Path(
           (munitContext match {
             case beforeEach: BeforeEach => beforeEach.test
             case afterEach: AfterEach   => afterEach.test
-          }).location.path
-        }
+          }).location.path,
+          os.pwd // Bazel compiles sources with paths relative to the execution root
+        )
     }
 
     override def munitTimeout = new FiniteDuration(120, TimeUnit.SECONDS)

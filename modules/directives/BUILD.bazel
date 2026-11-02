@@ -1,0 +1,20 @@
+load("//bazel:defs.bzl", "scala_cli_library")
+
+# `directives` in build.mill
+scala_cli_library(
+    name = "directives",
+    macro = True,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//modules/build-macros",
+        "//modules/core",
+        "//modules/options",
+        "//modules/specification-level",
+        "@maven//:ch_epfl_scala_bloop_config_2_13",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_core_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:com_lihaoyi_pprint_3",
+        "@maven//:org_graalvm_nativeimage_svm",
+        "@maven//:org_scala_lang_scala3_directives_parser_3",
+    ],
+)

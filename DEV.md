@@ -195,6 +195,19 @@ that embeds JARs of the scala-cli modules, and downloads their dependencies
 from Maven Central upon first launch (using the coursier cache, just like
 a coursier bootstrap).
 
+### Bazel (experimental)
+
+The project can also be built with Bazel 9, alongside Mill. Mill remains the
+reference build (releases, native images). See [bazel/README.md](bazel/README.md)
+for the Bazel equivalent of each command above, e.g.:
+
+```bash
+bazel build //...                       # ./mill -i __.compile
+bazel run //modules/cli:scala-cli -- …  # ./mill -i scala …
+bazel test //:unit_tests                # ./mill -i unitTests
+bazel test //modules/integration:jvm    # ./mill integration.test.jvm
+```
+
 ### Helper projects
 
 A number of features of Scala CLI are managed from external projects, living under

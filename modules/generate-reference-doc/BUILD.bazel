@@ -1,0 +1,21 @@
+load("//bazel:defs.bzl", "scala_cli_binary", "workspace_binary")
+
+# `generate-reference-doc` in build.mill
+scala_cli_binary(
+    name = "generate-reference-doc-bin",
+    srcs = glob(["src/main/scala/**/*.scala"]),
+    env = {"SCALA_CLI_POWER": "true"},
+    main_class = "scala.cli.doc.GenerateReferenceDoc",
+    deps = [
+        "//modules/cli",
+        "@maven//:com_github_alexarchambault_argonaut_shapeless_6_3_2_13",
+        "@maven//:com_github_alexarchambault_case_app_3",
+        "@maven//:org_scalameta_munit_3",
+    ],
+)
+
+# `./mill -i 'generate-reference-doc[]'.run [--check]`
+workspace_binary(
+    name = "generate-reference-doc",
+    binary = ":generate-reference-doc-bin",
+)

@@ -1,0 +1,31 @@
+load("//bazel:defs.bzl", "scala_cli_library")
+
+# `test-runner` in build.mill (main class scala.build.testrunner.DynamicTestRunner)
+scala_cli_library(
+    name = "test-runner",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@maven//:com_github_sbt_junit_jupiter_interface",
+        "@maven//:org_ow2_asm_asm",
+        "@maven//:org_scala_lang_modules_scala_collection_compat_3",
+        "@maven//:org_scala_sbt_test_interface",
+    ],
+)
+
+# `test-runner(Scala.runnerScala3)`: the build embedded in the local repository
+# (see //bazel/local-repo), cross-built with the legacy LTS (FutureLazyVals).
+scala_cli_library(
+    name = "test-runner_legacy_lts",
+    scala_version = "3.3.9",
+    scalacopts = [
+        "-Yfuture-lazy-vals",
+        "-java-output-version:11",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@maven//:com_github_sbt_junit_jupiter_interface",
+        "@maven//:org_ow2_asm_asm",
+        "@maven//:org_scala_lang_modules_scala_collection_compat_3",
+        "@maven//:org_scala_sbt_test_interface",
+    ],
+)

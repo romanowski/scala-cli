@@ -1,0 +1,15 @@
+load("@rules_java//java:java_library.bzl", "java_library")
+
+# `java-test-runner` in build.mill (pure Java, --release 8; main class
+# scala.build.testrunner.JavaDynamicTestRunner)
+java_library(
+    name = "java-test-runner",
+    srcs = glob(["src/main/java/**/*.java"]),
+    javacopts = ["--release", "8", "-Xlint:-options", "-g:source,lines"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@maven//:com_github_sbt_junit_jupiter_interface",
+        "@maven//:org_ow2_asm_asm",
+        "@maven//:org_scala_sbt_test_interface",
+    ],
+)
