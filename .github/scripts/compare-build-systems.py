@@ -2,7 +2,7 @@
 """Compares the Mill CI jobs with their Bazel shadow jobs (.github/workflows/bazel.yml).
 
 Pairs every `bazel / <job>` job of the current workflow run with the Mill job of the
-same id (`jvm / <job>`, `linux / <job>`, `macos / <job>`, `misc / <job>`), then reports, per pair:
+same id (`jvm / <job>`, `linux / <job>`, `macos / <job>`, `windows / <job>`, `misc / <job>`), then reports, per pair:
   * job durations, and durations of the steps both jobs share by name
     (e.g. "Unit tests", "JVM integration tests");
   * test counts (tests / failures+errors / skipped) from the JUnit XML reports,
@@ -25,7 +25,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 BAZEL_PREFIX = "bazel / "
-MILL_PREFIXES = ("jvm / ", "linux / ", "macos / ", "misc / ")
+MILL_PREFIXES = ("jvm / ", "linux / ", "macos / ", "windows / ", "misc / ")
 
 
 def parse_time(value):

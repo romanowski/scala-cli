@@ -142,7 +142,7 @@ jobs:
   # Mill vs Bazel shadow build: durations and test counts of paired jobs (see bazel/README.md).
   # Informational only: never fails, and the release job doesn't depend on it.
   build-comparison:
-    needs: [changes, jvm, linux, macos, misc, bazel]
+    needs: [changes, jvm, linux, macos, windows, misc, bazel]
     if: always() && needs.changes.outputs.test_skip != 'true'
     runs-on: ubuntu-24.04
     continue-on-error: true

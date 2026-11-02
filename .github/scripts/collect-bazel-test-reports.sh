@@ -5,7 +5,10 @@ set -euo pipefail
 
 dest="$1"
 mkdir -p "$dest"
-testlogs="$(bazel info bazel-testlogs 2>/dev/null)"
+startup=()
+# same output root as the Windows jobs in bazel.yml
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) startup=(--output_user_root=C:/b) ;; esac
+testlogs="$(bazel "${startup[@]}" info bazel-testlogs 2>/dev/null)"
 [[ -d "$testlogs" ]] || { echo "No Bazel test logs found"; exit 0; }
 
 find -L "$testlogs" -name test.xml | while read -r xml; do

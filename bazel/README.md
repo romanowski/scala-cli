@@ -82,7 +82,11 @@ block CI or releases.
 | `misc / reference-doc`                        | `bazel / reference-doc`                        |
 | `linux / generate-linux-launcher`             | `bazel / generate-linux-launcher`              |
 | `macos / generate-macos-arm64-launcher`       | `bazel / generate-macos-arm64-launcher`        |
+| `macos / generate-macos-launcher`             | `bazel / generate-macos-launcher`              |
+| `windows / generate-windows-launcher`         | `bazel / generate-windows-launcher`            |
 | `linux / native-linux-tests-default`          | `bazel / native-linux-tests-default`           |
+| `macos / native-macos-tests-default`          | `bazel / native-macos-tests-default`           |
+| `windows / native-windows-tests-default`      | `bazel / native-windows-tests-default`         |
 | `macos / native-macos-arm64-tests-default`    | `bazel / native-macos-arm64-tests-default`     |
 
 Paired jobs share their job id and the names of equivalent steps (`Cross compile
@@ -132,17 +136,34 @@ the state of the disk / repository caches restored by `setup-bazel`.
 ## Native image
 
 `//modules/cli:scala-cli-native` mirrors `cli[].base-image.nativeImage`
-(`bazel/native-image/`): GraalVM CE 25.0.2 (pinned in MODULE.bazel, Linux x64 / arm64
-and macOS arm64), the class path rewritten by `scala3-graal-processor`, the trust store
-without the compromised eMudhra CAs, and the same `native-image` options. It runs
-`native-image` on the host (local, unsandboxed action, several GB of RAM), so on Linux
-the binary links against the host glibc (Mill builds it in an ubuntu:24.04 container
-on CI; the shadow CI job builds on an ubuntu-24.04 runner).
+(`bazel/native-image/`): GraalVM CE (pinned in MODULE.bazel), the class path rewritten
+by `scala3-graal-processor`, the trust store without the compromised eMudhra CAs, and
+the same `native-image` options. It runs `native-image` on the host (local, unsandboxed
+action, several GB of RAM).
+
+| Platform        | GraalVM | Status |
+|-----------------|---------|--------|
+| macOS arm64     | 25.0.2  | built and tested locally |
+| macOS x64       | 25.0.1 (no newer x64 build, as in Mill) | built and tested locally, under Rosetta |
+| Linux x64 / arm64 | 25.0.2 | CI only (shadow jobs) |
+| Windows x64     | 25.0.2  | CI only (shadow jobs) |
+
+* The GraalVM is the host's by default. Force another one with
+  `--//bazel/native-image:graalvm_platform=<platform>`, e.g. `macos-x64` to build the
+  x64 macOS image on Apple Silicon (Rosetta). The output path doesn't depend on the
+  flag: switching it rebuilds `bazel-bin/modules/cli/native/scala-cli`.
+* On Linux the binary links against the host glibc (Mill builds it in an ubuntu:24.04
+  container on CI; the shadow job builds on an ubuntu-24.04 runner).
+* On Windows, like the mill-native-image plugin, `native-image.cmd` runs after
+  Visual Studio's `vcvars64.bat` (found in the usual locations, or `VCVARSALL`), and the
+  image links the static `sodium.lib`, `sodiumjni.lib` and `csjniutils.lib`
+  (CliNativeImage.staticLibDir). Use a short output root there, as CI does:
+  `bazel --output_user_root=C:/b build //modules/cli:scala-cli-native`.
 
 ## Not migrated yet (still Mill only)
 
-* Native images for macOS x64 and Windows, the static / mostly-static (Docker) images,
-  and the native-static and docker integration tests.
+* The static / mostly-static (Docker) native images, and the native-static and docker
+  integration tests.
 * `build-macros[_].test.testNegativeCompilation` (uses `scala-cli` from `PATH`).
 * `__.fix` (scalafix), `__.checkNativeImageConfFormat`, `ci.checkScalaVersions`.
 * Cross-builds for other Scala versions / release candidates, `docJar`.

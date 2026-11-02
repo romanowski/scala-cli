@@ -33,3 +33,8 @@ try-import %workspace%/user.bazelrc
 #   test --test_env=JAVA_HOME=/path/to/jdk17
 #   test --test_env=SCALA_CLI_TESTS_HOST_JAVA_HOME=/path/to/jdk17
 test --test_env="SCALA_CLI_EXTRA_TIMEOUT=120 seconds"
+
+# Windows: the test / run wrappers need a runfiles tree (applied automatically on
+# Windows hosts by --enable_platform_specific_config).
+common --enable_platform_specific_config
+common:windows --enable_runfiles

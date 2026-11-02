@@ -2,6 +2,23 @@
 
 load("@rules_java//java/common:java_info.bzl", "JavaInfo")
 
+def graalvm_select(platforms, target, windows_target = None):
+    """Selects `target` in the GraalVM repository picked by //bazel/native-image:graalvm_platform.
+
+    Args:
+      platforms: GraalVM platforms (keys of GRAALVM_PLATFORMS).
+      target: target in the GraalVM repository.
+      windows_target: target to use instead on Windows (e.g. bin/native-image.cmd).
+    """
+    return select({
+        "//bazel/native-image:%s_%s" % (kind, platform): "@graalvm_%s//:%s" % (
+            platform.replace("-", "_"),
+            windows_target if platform.startswith("windows") and windows_target else target,
+        )
+        for platform in platforms
+        for kind in ["host", "forced"]
+    })
+
 def _native_image_impl(ctx):
     jars = depset(transitive = [d[JavaInfo].transitive_runtime_jars for d in ctx.attr.deps]).to_list()
     classpath_file = ctx.actions.declare_file(ctx.label.name + ".classpath")
@@ -17,9 +34,13 @@ def _native_image_impl(ctx):
             classpath_file.path,
             ctx.attr.main_class,
             output.path,
-        ] + ctx.attr.options,
+        ] + [
+            arg
+            for lib, name in ctx.attr.static_libs.items()
+            for arg in ["--static-lib", lib.files.to_list()[0].path, name]
+        ] + ["--"] + ctx.attr.options,
         inputs = depset(
-            [classpath_file, ctx.file.processor_jar, ctx.file.trust_store] + ctx.files.graalvm + jars,
+            [classpath_file, ctx.file.processor_jar, ctx.file.trust_store] + ctx.files.graalvm + ctx.files.static_libs + jars,
         ),
         outputs = [output],
         mnemonic = "NativeImage",
@@ -46,6 +67,10 @@ native_image = rule(
         "native_image": attr.label(mandatory = True, allow_single_file = True),
         "processor_jar": attr.label(mandatory = True, allow_single_file = True, doc = "scala3-graal-processor deploy JAR"),
         "trust_store": attr.label(mandatory = True, allow_single_file = True),
+        "static_libs": attr.label_keyed_string_dict(
+            allow_files = True,
+            doc = "Static libraries to link (-H:CLibraryPath), mapped to their file name there",
+        ),
         "_script": attr.label(default = ":native_image.sh", executable = True, cfg = "exec", allow_single_file = True),
     },
 )

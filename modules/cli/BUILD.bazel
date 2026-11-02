@@ -191,8 +191,20 @@ native_image(
         ],
         "//conditions:default": [],
     }),
-    output_name = "native/scala-cli",
+    output_name = select({
+        "//bazel/native-image:windows": "native/scala-cli.exe",
+        "//conditions:default": "native/scala-cli",
+    }),
     processor_jar = "//bazel/native-image:graal_processor_deploy.jar",
+    # CliNativeImage.staticLibDir (Windows): libsodium, libsodiumjni, coursier jni-utils
+    static_libs = select({
+        "//bazel/native-image:windows": {
+            "@libsodium_msvc//:libsodium/x64/Release/v143/static/libsodium.lib": "sodium.lib",
+            "@libsodiumjni_win32_lib//file": "sodiumjni.lib",
+            "@csjniutils_win32_lib//file": "csjniutils.lib",
+        },
+        "//conditions:default": {},
+    }),
     tags = ["manual"],
     trust_store = "//bazel/native-image:trust_store",
     visibility = ["//visibility:public"],

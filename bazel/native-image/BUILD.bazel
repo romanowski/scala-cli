@@ -1,29 +1,72 @@
 # Native image support (Mill: CliNativeImage in project/settings/package.mill).
 
+load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@rules_java//java:java_binary.bzl", "java_binary")
+load(":defs.bzl", "graalvm_select")
 load("@rules_scala//scala:scala.bzl", "scala_binary")
 
 exports_files(["native_image.sh"])
 
-# GraalVM CE for the host platform (MODULE.bazel).
-GRAALVM_REPOS = {
-    "//bazel/tools:linux_arm64": "@graalvm_linux_aarch64",
-    "//bazel/tools:linux_x86_64": "@graalvm_linux_x64",
-    "//bazel/tools:macos_arm64": "@graalvm_macos_aarch64",
+# GraalVM CE to build with (MODULE.bazel): the host's by default, or a forced one, e.g. to
+# build the macOS x64 image on an Apple Silicon Mac (runs under Rosetta):
+#   bazel build //modules/cli:scala-cli-native --//bazel/native-image:graalvm_platform=macos-x64
+GRAALVM_PLATFORMS = {
+    # GraalVM platform: (OS constraint, CPU constraint)
+    "linux-aarch64": ("linux", "aarch64"),
+    "linux-x64": ("linux", "x86_64"),
+    "macos-aarch64": ("macos", "aarch64"),
+    "macos-x64": ("macos", "x86_64"),
+    "windows-x64": ("windows", "x86_64"),
 }
 
+string_flag(
+    name = "graalvm_platform",
+    build_setting_default = "host",
+    values = ["host"] + GRAALVM_PLATFORMS.keys(),
+)
+
 [
-    alias(
-        name = name,
-        actual = select({setting: repo + target for setting, repo in GRAALVM_REPOS.items()}),
-        visibility = ["//visibility:public"],
+    (
+        config_setting(
+            name = "host_" + platform,
+            constraint_values = ["@platforms//os:" + os, "@platforms//cpu:" + cpu],
+            flag_values = {":graalvm_platform": "host"},
+        ),
+        config_setting(
+            name = "forced_" + platform,
+            flag_values = {":graalvm_platform": platform},
+        ),
     )
-    for name, target in [
-        ("graalvm", "//:files"),
-        ("native-image", "//:bin/native-image"),
-        ("cacerts", "//:lib/security/cacerts"),
-    ]
+    for platform, (os, cpu) in GRAALVM_PLATFORMS.items()
 ]
+
+config_setting(
+    name = "is_windows",
+    flag_values = {":graalvm_platform": "windows-x64"},
+)
+
+selects.config_setting_group(
+    name = "windows",
+    match_any = [":is_windows", ":host_windows-x64"],
+)
+
+alias(
+    name = "graalvm",
+    actual = graalvm_select(GRAALVM_PLATFORMS, "files"),
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "native-image",
+    actual = graalvm_select(GRAALVM_PLATFORMS, "bin/native-image", "bin/native-image.cmd"),
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "cacerts",
+    actual = graalvm_select(GRAALVM_PLATFORMS, "lib/security/cacerts"),
+)
 
 # Mill: CliNativeImage.trustStoreDir. GraalVM still trusts the compromised eMudhra CAs
 # (CVE-2026-91403); native images embed the trust store used at build time.
