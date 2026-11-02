@@ -24,11 +24,13 @@ genrule(
     config_setting(
         name = name,
         constraint_values = ["@platforms//os:" + os, "@platforms//cpu:" + cpu],
+        visibility = ["//visibility:public"],
     )
     for name, os, cpu in [
         ("macos_arm64", "macos", "aarch64"),
         ("macos_x86_64", "macos", "x86_64"),
         ("linux_arm64", "linux", "aarch64"),
+        ("linux_x86_64", "linux", "x86_64"),
     ]
 ]
 

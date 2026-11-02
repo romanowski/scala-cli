@@ -295,3 +295,33 @@ http_archive(
     sha256 = "d23f4ba6afa7f092135b485303b0a020358fbb314abf9c6dc2576df3e2abd941",
     urls = ["https://github.com/coursier/coursier/releases/download/v%s/cs-x86_64-pc-win32.zip" % CS_VERSION],
 )
+
+# GraalVM CE used to build native images (deps.graalVmJvmId in project/deps/package.mill:
+# graalvm-community:25.0.2). There's no 25.0.2 build for macOS x64 (Mill uses 25.0.1 there),
+# which isn't supported by the Bazel build yet.
+GRAALVM_VERSION = "25.0.2"
+
+GRAALVM_BUILD_FILE = """
+exports_files(["bin/native-image", "bin/java", "lib/security/cacerts"])
+
+filegroup(
+    name = "files",
+    srcs = glob(["**"], exclude = ["**/* *"]),
+    visibility = ["//visibility:public"],
+)
+"""
+
+[
+    http_archive(
+        name = "graalvm_" + platform.replace("-", "_"),
+        build_file_content = GRAALVM_BUILD_FILE,
+        sha256 = sha256,
+        strip_prefix = "graalvm-community-openjdk-%s+10.1%s" % (GRAALVM_VERSION, "/Contents/Home" if platform.startswith("macos") else ""),
+        urls = ["https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-%s/graalvm-community-jdk-%s_%s_bin.tar.gz" % (GRAALVM_VERSION, GRAALVM_VERSION, platform)],
+    )
+    for platform, sha256 in {
+        "linux-aarch64": "b4580d9f223d0a4b3a1757e58b18ff4c1db950e67e105fc5cb741457d2384a71",
+        "linux-x64": "e0be791c8fda4d03b6b0a0cb824fef3149736170057b3a515252b44419606af0",
+        "macos-aarch64": "50201fb8e8e653e7a253d955877a6b6ad634b42e60c84f45df7e1bb51361635f",
+    }.items()
+]

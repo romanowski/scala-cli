@@ -27,6 +27,9 @@ Use [Bazelisk](https://github.com/bazelbuild/bazelisk) (`brew install bazelisk`,
 | `./mill -i 'generate-reference-doc[]'.run [--check]`                 | `bazel run //modules/generate-reference-doc [-- --check]`                               |
 | `./mill -i copyJvmLauncher --directory artifacts/`                   | `bazel build //modules/cli:scala-cli-standalone-jar` → `bazel-bin/modules/cli/launchers/standalone/scala-cli.jar`      |
 | `./mill -i copyJvmBootstrappedLauncher --directory artifacts/`       | `bazel build //modules/cli:scala-cli-bootstrapped-jar` → `bazel-bin/modules/cli/launchers/bootstrapped/scala-cli.jar`                           |
+| `./mill -i show 'cli[]'.nativeImage`                                 | `bazel build //modules/cli:scala-cli-native` → `bazel-bin/modules/cli/native/scala-cli`  |
+| `./mill -i integration.test.native`                                  | `bazel test //modules/integration:native`                                               |
+| `nativeIntegrationTests` + `SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY`  | `bazel test //modules/integration:native-prebuilt --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=/abs/scala-cli` |
 | `./mill -i --define scala.version.internal=X …`                      | `bazel … --repo_env=SCALA_VERSION=X` (X must be listed in `scala_config` in MODULE.bazel) |
 | `./mill -i clean`                                                    | not needed (outputs are content-addressed); `bazel clean` only as a last resort          |
 
@@ -77,6 +80,10 @@ block CI or releases.
 | `jvm / jvm-bootstrapped-tests-default`        | `bazel / jvm-bootstrapped-tests-default`       |
 | `misc / docs-tests`                           | `bazel / docs-tests`                           |
 | `misc / reference-doc`                        | `bazel / reference-doc`                        |
+| `linux / generate-linux-launcher`             | `bazel / generate-linux-launcher`              |
+| `macos / generate-macos-arm64-launcher`       | `bazel / generate-macos-arm64-launcher`        |
+| `linux / native-linux-tests-default`          | `bazel / native-linux-tests-default`           |
+| `macos / native-macos-arm64-tests-default`    | `bazel / native-macos-arm64-tests-default`     |
 
 Paired jobs share their job id and the names of equivalent steps (`Cross compile
 everything`, `Unit tests`, `JVM integration tests`, ...). The `build-comparison` job
@@ -116,16 +123,26 @@ the state of the disk / repository caches restored by `setup-bazel`.
   UUID of the stripped .tasty file) differs, because Mill's TASTy embeds its own sandbox
   path (`out/mill-no-daemon/<hash>/sandbox/...`) for inlined library code, and (b) the
   Scala Native classes Mill rewrites with `scala3-graal-processor` (SafeLazyVals) for
-  native images, a step not migrated yet. To get there, the Bazel build pins
+  native images; Mill applies it to the bootstrapped JAR too, Bazel only to the native image. To get there, the Bazel build pins
   commons-lang3 like Mill's per-module resolution, puts scala-asm before scala-compiler
   2.13 on the class path, and compiles Java without `-g` / `-parameters` (//bazel:java_toolchain).
 * Test discovery: rules_scala runs every concrete class annotated with JUnit's
   `@RunWith` (inherited by munit suites), like Mill's munit discovery.
 
+## Native image
+
+`//modules/cli:scala-cli-native` mirrors `cli[].base-image.nativeImage`
+(`bazel/native-image/`): GraalVM CE 25.0.2 (pinned in MODULE.bazel, Linux x64 / arm64
+and macOS arm64), the class path rewritten by `scala3-graal-processor`, the trust store
+without the compromised eMudhra CAs, and the same `native-image` options. It runs
+`native-image` on the host (local, unsandboxed action, several GB of RAM), so on Linux
+the binary links against the host glibc (Mill builds it in an ubuntu:24.04 container
+on CI; the shadow CI job builds on an ubuntu-24.04 runner).
+
 ## Not migrated yet (still Mill only)
 
-* Native images (`nativeImage`, static / mostly-static), and the native,
-  native-static and docker integration tests.
+* Native images for macOS x64 and Windows, the static / mostly-static (Docker) images,
+  and the native-static and docker integration tests.
 * `build-macros[_].test.testNegativeCompilation` (uses `scala-cli` from `PATH`).
 * `__.fix` (scalafix), `__.checkNativeImageConfFormat`, `ci.checkScalaVersions`.
 * Cross-builds for other Scala versions / release candidates, `docJar`.

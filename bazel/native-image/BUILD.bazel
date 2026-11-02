@@ -1,0 +1,51 @@
+# Native image support (Mill: CliNativeImage in project/settings/package.mill).
+
+load("@rules_java//java:java_binary.bzl", "java_binary")
+load("@rules_scala//scala:scala.bzl", "scala_binary")
+
+exports_files(["native_image.sh"])
+
+# GraalVM CE for the host platform (MODULE.bazel).
+GRAALVM_REPOS = {
+    "//bazel/tools:linux_arm64": "@graalvm_linux_aarch64",
+    "//bazel/tools:linux_x86_64": "@graalvm_linux_x64",
+    "//bazel/tools:macos_arm64": "@graalvm_macos_aarch64",
+}
+
+[
+    alias(
+        name = name,
+        actual = select({setting: repo + target for setting, repo in GRAALVM_REPOS.items()}),
+        visibility = ["//visibility:public"],
+    )
+    for name, target in [
+        ("graalvm", "//:files"),
+        ("native-image", "//:bin/native-image"),
+        ("cacerts", "//:lib/security/cacerts"),
+    ]
+]
+
+# Mill: CliNativeImage.trustStoreDir. GraalVM still trusts the compromised eMudhra CAs
+# (CVE-2026-91403); native images embed the trust store used at build time.
+java_binary(
+    name = "trust_store_filter",
+    srcs = ["TrustStoreFilter.java"],
+    main_class = "TrustStoreFilter",
+)
+
+genrule(
+    name = "trust_store",
+    srcs = [":cacerts"],
+    outs = ["trust-store/cacerts"],
+    cmd = "$(execpath :trust_store_filter) $< $@",
+    tools = [":trust_store_filter"],
+    visibility = ["//visibility:public"],
+)
+
+# Mill: cli.scala3GraalProcessorClassPath / CoursierCacheProcessor.
+scala_binary(
+    name = "graal_processor",
+    main_class = "scala.cli.graal.CoursierCacheProcessor",
+    visibility = ["//visibility:public"],
+    deps = ["@maven//:org_virtuslab_scala_cli_scala3_graal_processor_3"],
+)

@@ -1,5 +1,6 @@
 load("@rules_java//java:java_library.bzl", "java_library")
 load("//bazel:defs.bzl", "scala_cli_binary", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+load("//bazel/native-image:defs.bzl", "native_image")
 
 scala_cli_constants(
     name = "constants",
@@ -146,3 +147,53 @@ scala_cli_test(
         ("scala-cli-bootstrapped", "jvm.bootstrapped"),
     ]
 ]
+
+# Native image (Mill: `cli[].base-image.nativeImage`, `./mill -i show 'cli[]'.nativeImage`).
+# Built directly on the host; Mill's Docker-based variants (linux-docker-image on CI,
+# static, mostly-static) aren't migrated yet.
+genrule(
+    name = "launcher_type_default",
+    outs = ["launcher_type_default/scala/cli/internal/launcher-type.txt"],
+    cmd = "printf default > $@",
+)
+
+java_library(
+    name = "launcher_type_default_resources",
+    resource_strip_prefix = package_name() + "/launcher_type_default",
+    resources = [":launcher_type_default"],
+)
+
+native_image(
+    name = "scala-cli-native",
+    # Mill: launcher type resource, then runClasspath, then the local repository JAR.
+    deps = [
+        ":launcher_type_default_resources",
+        ":cli",
+        "//bazel/local-repo",
+    ],
+    graalvm = "//bazel/native-image:graalvm",
+    main_class = "scala.cli.ScalaCli",
+    native_image = "//bazel/native-image:native-image",
+    # CliNativeImage.nativeImageOptions (-H:CLibraryPath and the trust store are added
+    # by bazel/native-image/native_image.sh).
+    options = [
+        "--no-fallback",
+        "-march=compatibility",
+        "-H:IncludeResources=local-repo.zip",
+        "-H:IncludeResources=scala/cli/internal/launcher-type.txt",
+        "-H:IncludeResources=scala/cli/commands/publish/.*",
+        "-H:-ParseRuntimeOptions",
+    ] + select({
+        # https://stackoverflow.com/a/61325264
+        "//bazel/tools:linux_arm64": [
+            "-Djdk.lang.Process.launchMechanism=vfork",
+            "-H:PageSize=65536",
+        ],
+        "//conditions:default": [],
+    }),
+    output_name = "native/scala-cli",
+    processor_jar = "//bazel/native-image:graal_processor_deploy.jar",
+    tags = ["manual"],
+    trust_store = "//bazel/native-image:trust_store",
+    visibility = ["//visibility:public"],
+)

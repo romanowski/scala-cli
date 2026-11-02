@@ -35,6 +35,9 @@ on:
       test_legacy_lts:
         type: string
         required: true
+      test_native:
+        type: string
+        required: true
 
 env:
   BAZEL_FLAGS: --config=ci
@@ -237,3 +240,110 @@ jobs:
           echo "to update it, then commit the result."
           exit 1
         )
+
+  # linux.yml: generate-linux-launcher / macos.yml: generate-macos-arm64-launcher
+  # (Mill builds the Linux one in an ubuntu:24.04 Docker container; Bazel builds it
+  # directly on the ubuntu-24.04 runner.)
+  generate-native-launcher:
+    name: ${{ matrix.job }}
+    timeout-minutes: 120
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { job: generate-linux-launcher, os: ubuntu-24.04, artifact: bazel-linux-launchers }
+          - { job: generate-macos-arm64-launcher, os: macOS-15, artifact: bazel-macos-arm64-launchers }
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel native launcher generation (${{ matrix.job }})."
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: ${{ github.workflow }}-${{ matrix.job }}
+        repository-cache: true
+    # Mill: .github/scripts/generate-native-image.sh (`cli[].base-image.nativeImage`)
+    - name: Generate native launcher
+      if: env.SHOULD_RUN == 'true'
+      run: |
+        bazel build $BAZEL_FLAGS //modules/cli:scala-cli-native
+        mkdir -p artifacts
+        cp "$(bazel cquery $BAZEL_FLAGS --output=files //modules/cli:scala-cli-native 2>/dev/null)" artifacts/scala-cli
+        chmod +x artifacts/scala-cli
+        ls -la artifacts/
+    - uses: actions/upload-artifact@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        name: ${{ matrix.artifact }}
+        path: artifacts/
+        if-no-files-found: error
+        retention-days: 2
+
+  # linux.yml: native-linux-tests-default / macos.yml: native-macos-arm64-tests-default
+  native-tests:
+    name: ${{ matrix.job }}
+    needs: [generate-native-launcher]
+    timeout-minutes: 180
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { job: native-linux-tests-default, os: ubuntu-24.04, artifact: bazel-linux-launchers }
+          - { job: native-macos-arm64-tests-default, os: macOS-15, artifact: bazel-macos-arm64-launchers }
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel native integration tests (${{ matrix.job }})."
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v6
+      if: env.SHOULD_RUN == 'true'
+      with:
+        distribution: temurin
+        java-version: 17
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: ${{ github.workflow }}-native-tests
+        repository-cache: true
+    - uses: actions/download-artifact@v8
+      if: env.SHOULD_RUN == 'true'
+      with:
+        name: ${{ matrix.artifact }}
+        path: artifacts/
+    # Mill: `./mill -i nativeIntegrationTests` with SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY
+    - name: Native integration tests
+      if: env.SHOULD_RUN == 'true'
+      run: |
+        chmod +x artifacts/scala-cli
+        bazel test $BAZEL_FLAGS \
+          --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI \
+          --test_env=SCALA_CLI_IT_GROUP=1 \
+          --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=$PWD/artifacts/scala-cli \
+          //modules/integration:native-prebuilt
+    - name: Collect test reports
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      run: .github/scripts/collect-bazel-test-reports.sh bazel-test-reports
+    - name: Upload test report
+      uses: actions/upload-artifact@v7
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      with:
+        name: bazel-test-results-${{ matrix.job }}
+        path: bazel-test-reports/
+        if-no-files-found: ignore

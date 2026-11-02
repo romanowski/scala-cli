@@ -5,8 +5,16 @@
 set -euo pipefail
 
 runner="$PWD/$1"
-launcher="$PWD/$2"
-shift 2
+shift
+# The launcher under test: built by Bazel ($2), or, like Mill's
+# SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY, a prebuilt one (e.g. a CI artifact) given
+# with --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=/abs/path (then $2 is "-").
+if [[ "$1" == "-" ]]; then
+  launcher="${SCALA_CLI_IT_FORCED_LAUNCHER:?SCALA_CLI_IT_FORCED_LAUNCHER not set}"
+else
+  launcher="$PWD/$1"
+fi
+shift
 
 base="${TEST_TMPDIR}/working-dir"
 mkdir -p "$base"

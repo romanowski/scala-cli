@@ -2,7 +2,7 @@
 """Compares the Mill CI jobs with their Bazel shadow jobs (.github/workflows/bazel.yml).
 
 Pairs every `bazel / <job>` job of the current workflow run with the Mill job of the
-same id (`jvm / <job>`, `misc / <job>`), then reports, per pair:
+same id (`jvm / <job>`, `linux / <job>`, `macos / <job>`, `misc / <job>`), then reports, per pair:
   * job durations, and durations of the steps both jobs share by name
     (e.g. "Unit tests", "JVM integration tests");
   * test counts (tests / failures+errors / skipped) from the JUnit XML reports,
@@ -25,7 +25,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 BAZEL_PREFIX = "bazel / "
-MILL_PREFIXES = ("jvm / ", "misc / ")
+MILL_PREFIXES = ("jvm / ", "linux / ", "macos / ", "misc / ")
 
 
 def parse_time(value):
@@ -79,6 +79,23 @@ def count_tests(directory):
     return totals if found else None
 
 
+def mill_report_names(job_id):
+    """Mill's report artifact names: test-results-<job id>, except for the native test
+    jobs, which drop the `native-` prefix (e.g. test-results-linux-tests-default)."""
+    names = [f"test-results-{job_id}"]
+    if job_id.startswith("native-"):
+        names.append(f"test-results-{job_id[len('native-'):]}")
+    return names
+
+
+def first_counts(reports_dir, names):
+    for name in names:
+        counts = count_tests(os.path.join(reports_dir, name))
+        if counts is not None:
+            return counts
+    return None
+
+
 def fmt_duration(seconds):
     if seconds is None:
         return "–"
@@ -129,7 +146,7 @@ def main():
             "mill": {
                 "conclusion": mill_job.get("conclusion"),
                 "seconds": duration(mill_job),
-                "tests": count_tests(os.path.join(args.reports_dir, f"test-results-{job_id}")),
+                "tests": first_counts(args.reports_dir, mill_report_names(job_id)),
             },
             "bazel": {
                 "conclusion": bazel_job.get("conclusion"),

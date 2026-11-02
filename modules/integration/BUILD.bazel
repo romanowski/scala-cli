@@ -64,3 +64,25 @@ scala_cli_integration_test(
     lib = ":test-lib",
     timeout = "eternal",
 )
+
+# `./mill -i integration.test.native` (native launcher built by //modules/cli:scala-cli-native).
+scala_cli_integration_test(
+    name = "native",
+    kind = "native",
+    launcher = "//modules/cli:scala-cli-native",
+    lib = ":test-lib",
+    tags = ["manual"],
+    timeout = "eternal",
+)
+
+# `./mill -i nativeIntegrationTests` with SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY: tests a
+# prebuilt native launcher (e.g. a CI artifact), without building one:
+#   bazel test //modules/integration:native-prebuilt --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=$PWD/scala-cli
+scala_cli_integration_test(
+    name = "native-prebuilt",
+    kind = "native",
+    launcher = None,
+    lib = ":test-lib",
+    tags = ["manual"],
+    timeout = "eternal",
+)

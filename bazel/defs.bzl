@@ -174,7 +174,8 @@ def scala_cli_integration_test(name, lib, launcher, kind, shard_count = 1, tags 
       name: target name.
       lib: the compiled integration tests (a `scala_cli_test` `-lib` target).
       launcher: the Scala CLI launcher under test (a runnable JAR for JVM kinds,
-        an executable for native kinds).
+        an executable for native kinds), or None to require a prebuilt one, passed
+        with --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=/abs/path.
       kind: value of `-Dtest.scala-cli.kind` (jvm, jvmBootstrapped, native, ...).
       shard_count: number of test shards.
       tags: extra tags.
@@ -185,7 +186,6 @@ def scala_cli_integration_test(name, lib, launcher, kind, shard_count = 1, tags 
         name = runner,
         tests_from = [lib],
         runtime_deps = [lib],
-        data = [launcher],
         # test.scala-cli.path must be absolute: integration_test.sh passes it.
         jvm_flags = TEST_JVM_FLAGS + ["-Dtest.scala-cli.kind=" + kind],
         suffixes = ALL_CLASSES,
@@ -197,9 +197,9 @@ def scala_cli_integration_test(name, lib, launcher, kind, shard_count = 1, tags 
         srcs = ["//bazel/tools:integration_test.sh"],
         args = [
             "$(rootpath :%s)" % runner,
-            "$(rootpath %s)" % launcher,
+            "$(rootpath %s)" % launcher if launcher else "-",
         ],
-        data = [":" + runner, launcher, "//:scala-cli.sh"],
+        data = [":" + runner, "//:scala-cli.sh"] + ([launcher] if launcher else []),
         shard_count = shard_count,
         # Runs the CLI as a subprocess: downloads compilers / JVMs, uses the global
         # Bloop daemon, sometimes Docker; not sandbox-friendly, and run alone (like

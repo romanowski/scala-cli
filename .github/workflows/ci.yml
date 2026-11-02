@@ -40,6 +40,7 @@ jobs:
       test_docs: ${{ needs.changes.outputs.test_docs }}
       test_skip: ${{ needs.changes.outputs.test_skip }}
       test_legacy_lts: ${{ needs.changes.outputs.test_legacy_lts }}
+      test_native: ${{ needs.changes.outputs.test_native }}
 
   linux:
     needs: [changes]
@@ -141,7 +142,7 @@ jobs:
   # Mill vs Bazel shadow build: durations and test counts of paired jobs (see bazel/README.md).
   # Informational only: never fails, and the release job doesn't depend on it.
   build-comparison:
-    needs: [changes, jvm, misc, bazel]
+    needs: [changes, jvm, linux, macos, misc, bazel]
     if: always() && needs.changes.outputs.test_skip != 'true'
     runs-on: ubuntu-24.04
     continue-on-error: true
