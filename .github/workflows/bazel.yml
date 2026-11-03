@@ -427,8 +427,7 @@ jobs:
           startup=(--output_user_root=C:/b)
           launcher="$(cygpath -m "$PWD/artifacts/scala-cli.exe")"
           # as in windows.yml
-          extra=(--test_env=COURSIER_JNI=force --test_env=SCALA_CLI_SODIUM_JNI_ALLOW=false
-                 --test_env=USERPROFILE --test_env=LOCALAPPDATA --test_env=APPDATA --test_env=TEMP --test_env=TMP)
+          extra=(--test_env=COURSIER_JNI=force --test_env=SCALA_CLI_SODIUM_JNI_ALLOW=false)
         fi
         chmod +x artifacts/*
         .github/scripts/bazel-retry.sh "${startup[@]}" test $BAZEL_FLAGS \

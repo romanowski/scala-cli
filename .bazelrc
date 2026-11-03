@@ -49,5 +49,11 @@ test --test_env="SCALA_CLI_EXTRA_TIMEOUT=120 seconds"
 # Windows hosts by --enable_platform_specific_config).
 common --enable_platform_specific_config
 common:windows --enable_runfiles
+# Windows' basic environment, which Mill's test runs inherit (strict test environments
+# drop it): without PATHEXT, programs such as `node` aren't found on the PATH.
+test:windows --test_env=PATHEXT --test_env=SystemRoot --test_env=WINDIR --test_env=ComSpec
+test:windows --test_env=SystemDrive --test_env=ProgramData --test_env=ProgramFiles
+test:windows --test_env=APPDATA --test_env=LOCALAPPDATA --test_env=USERPROFILE
+test:windows --test_env=TEMP --test_env=TMP
 # Bazel can't execute the .sh workspace status command on Windows: go through bash.
 common:windows --workspace_status_command=bazel/workspace_status.bat
