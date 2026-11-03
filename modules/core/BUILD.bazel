@@ -3,7 +3,7 @@ load("//bazel:defs.bzl", "scala_cli_constants", "scala_cli_library", "scala_cli_
 scala_cli_constants(
     name = "constants",
     out = "Constants.scala",
-    template = "//bazel:constants/core.scala.tpl",
+    template = "//bazel/constants:core.scala.tpl",
 )
 
 # `core` in build.mill

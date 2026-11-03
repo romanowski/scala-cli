@@ -62,7 +62,8 @@ and Mill also runs them sequentially on CI.
 | `.bazelrc`                   | JDKs (tools on 21, binaries/tests on 17), stamping, CI config                             |
 | `bazel/defs.bzl`             | Macros mirroring Mill module traits (`scala_cli_library`, `scala_cli_test`, ...)          |
 | `bazel/BUILD.bazel`          | Scala toolchains (transitive class path, like Mill) and the JUnit 4.13 testing toolchain |
-| `bazel/constants/`           | Templates of the generated `Constants.scala` files                                        |
+| `bazel/constants/`           | `Constants.scala` templates, their values (`values.bzl`) and the rendering rule          |
+| `bazel/extensions.bzl`       | `build_info`: MODULE.bazel versions and Maven lock versions, loadable from BUILD files   |
 | `bazel/workspace_status.sh`  | Version / GitHub repo values stamped into the constants (mirrors `finalPublishVersion`)   |
 | `bazel/local-repo/`          | The `local-repo.zip` resource embedding runner / test-runner / java-test-runner           |
 | `bazel/tools/`               | `cs` binary, local repo generator, test and `bazel run` wrappers                          |
@@ -109,11 +110,27 @@ the state of the disk / repository caches restored by `setup-bazel`.
 
 ## Keeping Bazel and Mill in sync
 
+Inside the Bazel build, every value is defined once:
+
+* **Versions the build uses** (Scala versions, GraalVM, coursier, libsodium, Alpine,
+  dependency families...) are variables in `MODULE.bazel`. The `build_info` extension
+  (`bazel/extensions.bzl`) republishes them, the contents of `.mill-version` and the
+  versions of every resolved Maven artifact (`maven_install.json`) as
+  `@scala_cli_build_info//:info.bzl`.
+* **Generated `Constants.scala` files**: `bazel/constants/*.scala.tpl` only hold
+  `@@name@@` placeholders. `bazel/constants/values.bzl` defines each value once, taken
+  from the build where it can be (`BUILD_INFO`, `maven_version("group:artifact")`, the
+  workspace status for the Scala CLI version), otherwise as a literal mirroring
+  project/deps/package.mill (Mill-only data, such as the default sbt version of
+  `export`). BUILD files reuse the same values (Java release levels, legacy LTS Scala
+  version, resource paths...). An unknown placeholder fails the build.
+
+Between Bazel and Mill, some values are still duplicated:
+
 * **Dependencies**: change `project/deps/package.mill` *and* `MODULE.bazel`, then
   `REPIN=1 bazel run @maven//:pin`.
-* **Generated constants**: `bazel/constants/*.scala.tpl` hold the values Mill
-  computes. After a version bump, run `bazel/check-mill-parity.sh`: it diffs
-  every Bazel-generated `Constants.scala` against Mill's.
+* **Mill-only data** in `bazel/constants/values.bzl`: run `bazel/check-mill-parity.sh`
+  after a version bump; it diffs every Bazel-generated `Constants.scala` against Mill's.
 
 ## Differences from Mill
 

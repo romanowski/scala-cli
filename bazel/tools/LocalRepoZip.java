@@ -21,7 +21,7 @@ import java.util.zip.ZipOutputStream;
  * (org/module/rev/{jars,ivys}/...) with the runner, test-runner and java-test-runner modules, plus a
  * `version` entry that scala.build.LocalRepo uses as the extraction directory name.
  *
- * <p>Usage: LocalRepoZip OUT_JAR STATUS_FILE (--module ORG NAME JAR DEPS)...
+ * <p>Usage: LocalRepoZip OUT_JAR STATUS_FILE RESOURCE_NAME (--module ORG NAME JAR DEPS)...
  *
  * <p>DEPS is a comma-separated list of org:name:rev[:provided] (may be empty).
  */
@@ -32,9 +32,10 @@ public final class LocalRepoZip {
   public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
     Path out = Paths.get(args[0]);
     String version = readStatus(Paths.get(args[1]), "STABLE_SCALA_CLI_VERSION");
+    String resourceName = args[2]; // Constants.localRepoResourcePath
 
     List<Module> modules = new ArrayList<>();
-    for (int i = 2; i < args.length; i += 5) {
+    for (int i = 3; i < args.length; i += 5) {
       if (!args[i].equals("--module")) throw new IllegalArgumentException("Expected --module, got " + args[i]);
       List<String[]> deps = new ArrayList<>();
       if (!args[i + 4].isEmpty())
@@ -61,7 +62,7 @@ public final class LocalRepoZip {
 
     try (OutputStream os = new BufferedOutputStream(Files.newOutputStream(out));
         ZipOutputStream jar = new ZipOutputStream(os)) {
-      put(jar, "local-repo.zip", zipBytes.toByteArray());
+      put(jar, resourceName, zipBytes.toByteArray());
     }
   }
 

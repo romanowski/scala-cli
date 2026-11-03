@@ -11,8 +11,8 @@ scala_cli_library(
 scala_cli_constants(
     name = "test_constants",
     out = "Constants.scala",
-    rlocations = {"CS_RLOCATION": "//bazel/tools:cs"},
-    template = "//bazel:constants/integration-test.scala.tpl",
+    rlocations = {"//bazel/tools:cs": "cs_rlocation"},
+    template = "//bazel/constants:integration-test.scala.tpl",
     testonly = True,
 )
 

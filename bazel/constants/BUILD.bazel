@@ -1,0 +1,4 @@
+# Templates of the generated Constants.scala files, rendered by `scala_cli_constants`
+# (constants.bzl) with the values of values.bzl.
+
+exports_files(glob(["*.scala.tpl"]))

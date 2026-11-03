@@ -5,7 +5,7 @@ load("//bazel:defs.bzl", "ALL_CLASSES", "TEST_JVM_FLAGS", "scala_cli_constants",
 scala_cli_constants(
     name = "constants",
     out = "Constants.scala",
-    template = "//bazel:constants/docs-tests.scala.tpl",
+    template = "//bazel/constants:docs-tests.scala.tpl",
 )
 
 # `docs-tests` (main sources: sclicheck) in build.mill

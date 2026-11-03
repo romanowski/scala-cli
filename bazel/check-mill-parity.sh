@@ -38,7 +38,7 @@ normalize() {
     "$1"
 }
 
-scala_version="$(sed -nE 's/^SCALA_VERSION = "(.*)"/\1/p' MODULE.bazel)"
+scala_version="$(sed -nE 's/^SCALA_VERSION = "([^"]*)".*/\1/p' MODULE.bazel)"
 status=0
 for p in "${pairs[@]}"; do
   IFS='|' read -r task target out <<< "$p"

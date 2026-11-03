@@ -2,22 +2,21 @@ load("@rules_java//toolchains:default_java_toolchain.bzl", "DEFAULT_JAVACOPTS", 
 load("@rules_scala//scala:scala_cross_version.bzl", "version_suffix")
 load("@rules_scala//scala:scala_toolchain.bzl", "scala_toolchain")
 load("@rules_scala_config//:config.bzl", "SCALA_VERSIONS")
+load("//bazel/constants:values.bzl", "DEFAULT_JAVA", "SCALA3_LEGACY_LTS")
 load("@rules_scala//testing:testing.bzl", "setup_scala_testing_toolchain")
-
-exports_files(glob(["constants/*.scala.tpl"]))
 
 # One toolchain per configured Scala version (see scala_config in MODULE.bazel).
 #
 # - dependency_mode = "transitive": the compile class path contains all
 #   transitive dependencies, like Mill (rules_scala defaults to direct deps only).
 # - `-java-output-version:17` mirrors javaOutputVersionOptions in
-#   project/settings/package.mill (not applied to the legacy 3.3 LTS, whose
+#   project/settings/package.mill (Java.defaultJava; not applied to the legacy LTS, whose
 #   modules set their own options).
 [
     scala_toolchain(
         name = "scala_toolchain_impl" + version_suffix(v),
         dependency_mode = "transitive",
-        scalacopts = [] if v.startswith("3.3.") else ["-java-output-version:17"],
+        scalacopts = [] if v == SCALA3_LEGACY_LTS else ["-java-output-version:%d" % DEFAULT_JAVA],
         strict_deps_mode = "off",
         unused_dependency_checker_mode = "off",
         use_argument_file_in_runner = True,
@@ -48,13 +47,13 @@ setup_scala_testing_toolchain(
     ],
 )
 
-# Java toolchain for language version 17 (.bazelrc): rules_java's default, minus `-g` and
+# Java toolchain for language version DEFAULT_JAVA (17, also set in .bazelrc): rules_java's default, minus `-g` and
 # `-parameters`, so that javac output matches Mill's (plain javac: `-g:source,lines`, no
 # MethodParameters attributes).
 default_java_toolchain(
     name = "java_toolchain",
     configuration = DEFAULT_TOOLCHAIN_CONFIGURATION,
     misc = [o for o in DEFAULT_JAVACOPTS if o not in ("-g", "-parameters")],
-    source_version = "17",
-    target_version = "17",
+    source_version = str(DEFAULT_JAVA),
+    target_version = str(DEFAULT_JAVA),
 )

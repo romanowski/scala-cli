@@ -1,3 +1,4 @@
+load("//bazel/constants:values.bzl", "MINIMUM_RUNNER_JAVA", "SCALA3_LEGACY_LTS")
 load("//bazel:defs.bzl", "scala_cli_library")
 
 # `test-runner` in build.mill (main class scala.build.testrunner.DynamicTestRunner)
@@ -16,10 +17,10 @@ scala_cli_library(
 # (see //bazel/local-repo), cross-built with the legacy LTS (FutureLazyVals).
 scala_cli_library(
     name = "test-runner_legacy_lts",
-    scala_version = "3.3.9",
+    scala_version = SCALA3_LEGACY_LTS,
     scalacopts = [
         "-Yfuture-lazy-vals",
-        "-java-output-version:11",
+        "-java-output-version:%d" % MINIMUM_RUNNER_JAVA,
     ],
     visibility = ["//visibility:public"],
     deps = [

@@ -7,8 +7,18 @@
 # (runner(Scala.runnerScala3), test-runner(Scala.runnerScala3), java-test-runner).
 
 load("@rules_java//java:java_import.bzl", "java_import")
+load("//bazel/constants:values.bzl", "LOCAL_REPO_RESOURCE_PATH", "ORGANIZATION", "SCALA3_LEGACY_LTS", "maven_version")
 
-SCALA3_LIBRARY_LEGACY_LTS = "org.scala-lang:scala3-library_3:3.3.9"
+SCALA3_LIBRARY_LEGACY_LTS = "org.scala-lang:scala3-library_3:" + SCALA3_LEGACY_LTS
+
+# Versions come from the Maven resolution (maven_install.json).
+ASM = "org.ow2.asm:asm:" + maven_version("org.ow2.asm:asm")
+
+COLLECTION_COMPAT = "org.scala-lang.modules:scala-collection-compat_3:" + maven_version("org.scala-lang.modules:scala-collection-compat_3")
+
+TEST_INTERFACE = "org.scala-sbt:test-interface:" + maven_version("org.scala-sbt:test-interface")
+
+JUPITER_INTERFACE_PROVIDED = "com.github.sbt.junit:jupiter-interface:%s:provided" % maven_version("com.github.sbt.junit:jupiter-interface")
 
 MODULES = [
     (
@@ -20,20 +30,20 @@ MODULES = [
         "test-runner_3",
         "//modules/test-runner:test-runner_legacy_lts",
         [
-            "org.ow2.asm:asm:9.11.1",
-            "org.scala-lang.modules:scala-collection-compat_3:2.14.0",
-            "org.scala-sbt:test-interface:1.0",
+            ASM,
+            COLLECTION_COMPAT,
+            TEST_INTERFACE,
             SCALA3_LIBRARY_LEGACY_LTS,
-            "com.github.sbt.junit:jupiter-interface:0.19.0:provided",
+            JUPITER_INTERFACE_PROVIDED,
         ],
     ),
     (
         "java-test-runner",
         "//modules/java-test-runner",
         [
-            "org.ow2.asm:asm:9.11.1",
-            "org.scala-sbt:test-interface:1.0",
-            "com.github.sbt.junit:jupiter-interface:0.19.0:provided",
+            ASM,
+            TEST_INTERFACE,
+            JUPITER_INTERFACE_PROVIDED,
         ],
     ),
 ]
@@ -42,8 +52,8 @@ genrule(
     name = "local_repo_jar",
     srcs = [target for _, target, _ in MODULES],
     outs = ["local-repo.jar"],
-    cmd = "$(execpath //bazel/tools:local_repo_zip) $@ bazel-out/stable-status.txt " + " ".join([
-        "--module org.virtuslab.scala-cli %s $$(echo $(execpaths %s) | tr ' ' '\\n' | grep -v -- '-ijar.jar$$' | grep '\\.jar$$' | head -1) '%s'" % (name, target, ",".join(deps))
+    cmd = "$(execpath //bazel/tools:local_repo_zip) $@ bazel-out/stable-status.txt %s " % LOCAL_REPO_RESOURCE_PATH + " ".join([
+        "--module " + ORGANIZATION + " %s $$(echo $(execpaths %s) | tr ' ' '\\n' | grep -v -- '-ijar.jar$$' | grep '\\.jar$$' | head -1) '%s'" % (name, target, ",".join(deps))
         for name, target, deps in MODULES
     ]),
     stamp = 1,

@@ -1,10 +1,11 @@
 load("@rules_java//java:java_library.bzl", "java_library")
+load("//bazel/constants:values.bzl", "DEFAULT_JAVA")
 
 # `scala-cli-bsp` in build.mill (pure Java, --release 17)
 java_library(
     name = "scala-cli-bsp",
     srcs = glob(["src/main/java/**/*.java"]),
-    javacopts = ["--release", "17", "-g:source,lines"],
+    javacopts = ["--release", str(DEFAULT_JAVA), "-g:source,lines"],
     visibility = ["//visibility:public"],
     exports = ["@maven//:ch_epfl_scala_bsp4j"],
     deps = ["@maven//:ch_epfl_scala_bsp4j"],

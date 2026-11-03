@@ -7,6 +7,8 @@ definitions in build.mill (one macro call per Mill module).
 load("@rules_scala//scala:scala.bzl", "scala_binary", "scala_junit_test", "scala_library", "scala_macro_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel/constants:constants.bzl", _scala_cli_constants = "scala_cli_constants")
+load("//bazel/constants:values.bzl", "DEFAULT_JAVA")
 
 # ScalaCliModule.scalacOptions / javaOutputVersionOptions in project/settings/package.mill.
 # `-java-output-version` is set per Scala version in the toolchain (//bazel:BUILD.bazel).
@@ -14,7 +16,7 @@ SCALACOPTS = ["-feature", "-deprecation"]
 
 # ScalaCliModule.javacOptions (Java.defaultJava). `-g:source,lines` is javac's default
 # debug info, which Mill uses; Bazel's Java toolchain passes `-g` (adds local variable tables).
-JAVACOPTS = ["--release", "17", "-g:source,lines"]
+JAVACOPTS = ["--release", str(DEFAULT_JAVA), "-g:source,lines"]
 
 # rules_scala discovers JUnit tests by class name prefix / suffix, then keeps
 # concrete classes annotated with @RunWith (inherited by every munit suite).
@@ -22,43 +24,11 @@ JAVACOPTS = ["--release", "17", "-g:source,lines"]
 # RunTestsDefault or CompileTests213 have no common suffix.
 ALL_CLASSES = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".elems()
 
+# Generated Constants.scala files (bazel/constants).
+scala_cli_constants = _scala_cli_constants
+
 # ScalaCliTests.forkArgs
 TEST_JVM_FLAGS = ["-Xmx512m", "-Xms128m"]
-
-def scala_cli_constants(name, template, out, rlocations = {}, **kwargs):
-    """Generates a Constants.scala from bazel/constants/<template>.
-
-    `{STABLE_*}` placeholders are filled from the workspace status
-    (bazel/workspace_status.sh). Placeholders listed in `rlocations` are
-    replaced by the runfiles path of the given label.
-
-    Args:
-      name: target name.
-      template: the .scala.tpl file.
-      out: output file name.
-      rlocations: dict of placeholder name -> label (single file).
-      **kwargs: passed to genrule.
-    """
-    seds = [
-        "-e \"s|{%s}|$$(grep '^%s ' bazel-out/stable-status.txt | cut -d' ' -f2-)|g\"" % (k, k)
-        for k in [
-            "STABLE_SCALA_CLI_VERSION",
-            "STABLE_SCALA_CLI_GH_ORG",
-            "STABLE_SCALA_CLI_GH_NAME",
-        ]
-    ]
-    seds += [
-        "-e 's|{%s}|$(rlocationpath %s)|g'" % (k, v)
-        for k, v in rlocations.items()
-    ]
-    native.genrule(
-        name = name,
-        srcs = [template] + rlocations.values(),
-        outs = [out],
-        cmd = "sed %s $(location %s) > $@" % (" ".join(seds), template),
-        stamp = 1,
-        **kwargs
-    )
 
 def scala_cli_library(name, srcs = None, deps = [], scalacopts = [], javacopts = [], resources = None, resource_strip_prefix = None, macro = False, **kwargs):
     """A Mill `ScalaCliModule` main source set (src/main/{scala,java,resources}).

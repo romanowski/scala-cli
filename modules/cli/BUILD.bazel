@@ -1,18 +1,19 @@
 load("@rules_java//java:java_library.bzl", "java_library")
 load("//bazel:defs.bzl", "scala_cli_binary", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+load("//bazel/constants:values.bzl", "DEFAULT_FILES_RESOURCE_PATH", "LAUNCHER_TYPE_RESOURCE_PATH", "LOCAL_REPO_RESOURCE_PATH", "UBUNTU_IMAGE")
 load("//bazel/native-image:defs.bzl", "scala_cli_native_image")
 
 scala_cli_constants(
     name = "constants",
     out = "Constants.scala",
-    template = "//bazel:constants/cli.scala.tpl",
+    template = "//bazel/constants:cli.scala.tpl",
 )
 
 scala_cli_constants(
     name = "options_constants",
     # Constants.scala, like Mill (the name ends up in the classes' SourceFile attribute)
     out = "options_constants/Constants.scala",
-    template = "//bazel:constants/cli-options.scala.tpl",
+    template = "//bazel/constants:cli-options.scala.tpl",
 )
 
 # `cli[].defaultFilesResources` in build.mill
@@ -23,12 +24,12 @@ genrule(
         "@default_workflow_gitignore//file",
     ],
     outs = [
-        "default_files/scala/cli/commands/publish/workflows/default.yml",
-        "default_files/scala/cli/commands/publish/gitignore",
+        "default_files/%s/workflows/default.yml" % DEFAULT_FILES_RESOURCE_PATH,
+        "default_files/%s/gitignore" % DEFAULT_FILES_RESOURCE_PATH,
     ],
     cmd = " && ".join([
-        "sed 's| ./scala-cli| scala-cli|g' $(location @default_workflow_ci_yml//file) > $(location default_files/scala/cli/commands/publish/workflows/default.yml)",
-        "cp $(location @default_workflow_gitignore//file) $(location default_files/scala/cli/commands/publish/gitignore)",
+        "sed 's| ./scala-cli| scala-cli|g' $(location @default_workflow_ci_yml//file) > $(location default_files/%s/workflows/default.yml)" % DEFAULT_FILES_RESOURCE_PATH,
+        "cp $(location @default_workflow_gitignore//file) $(location default_files/%s/gitignore)" % DEFAULT_FILES_RESOURCE_PATH,
     ]),
 )
 
@@ -155,9 +156,9 @@ scala_cli_test(
 NATIVE_IMAGE_OPTIONS = [
     "--no-fallback",
     "-march=compatibility",
-    "-H:IncludeResources=local-repo.zip",
-    "-H:IncludeResources=scala/cli/internal/launcher-type.txt",
-    "-H:IncludeResources=scala/cli/commands/publish/.*",
+    "-H:IncludeResources=" + LOCAL_REPO_RESOURCE_PATH,
+    "-H:IncludeResources=" + LAUNCHER_TYPE_RESOURCE_PATH,
+    "-H:IncludeResources=%s/.*" % DEFAULT_FILES_RESOURCE_PATH,
     "-H:-ParseRuntimeOptions",
 ]
 
@@ -166,7 +167,7 @@ NATIVE_IMAGE_OPTIONS = [
     (
         genrule(
             name = "launcher_type_" + kind,
-            outs = ["launcher_type_%s/scala/cli/internal/launcher-type.txt" % kind],
+            outs = ["launcher_type_%s/%s" % (kind, LAUNCHER_TYPE_RESOURCE_PATH)],
             cmd = "printf %s > $@" % kind,
         ),
         java_library(
@@ -252,7 +253,7 @@ scala_cli_native_image(
 )
 
 # `./mill -i show 'cli[]'.nativeImageMostlyStatic` (`cli[].mostly-static-image`): only
-# libc linked dynamically, built in Docker (linux/amd64, ubuntu:24.04).
+# libc linked dynamically, built in Docker (linux/amd64, UBUNTU_IMAGE).
 scala_cli_native_image(
     name = "scala-cli-native-mostly-static",
     deps = [
@@ -261,7 +262,7 @@ scala_cli_native_image(
         "//bazel/local-repo",
     ],
     docker_args = ["-H:+StaticExecutableWithDynamicLibC"],
-    docker_image = "ubuntu:24.04",
+    docker_image = UBUNTU_IMAGE,
     # NativeImage.linuxMostlyStaticParams
     docker_prepare = "apt-get update -q -y && apt-get install -q -y build-essential libz-dev\n" + DOCKER_LOCALE_SETUP,
     graalvm = "@graalvm_linux_x64//:files",
