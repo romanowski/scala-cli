@@ -25,6 +25,21 @@ def _native_image_impl(ctx):
     ctx.actions.write(classpath_file, "\n".join([j.path for j in jars]) + "\n")
     output = ctx.actions.declare_file(ctx.attr.output_name)
 
+    docker = []
+    docker_inputs = []
+    if ctx.attr.docker_image:
+        docker += ["--docker-image", ctx.attr.docker_image]
+        if ctx.files.docker_context:
+            docker += ["--docker-context", ctx.files.docker_context[0].dirname]
+            docker_inputs += ctx.files.docker_context
+        if ctx.attr.docker_prepare:
+            prepare = ctx.actions.declare_file(ctx.label.name + ".prepare.sh")
+            ctx.actions.write(prepare, ctx.attr.docker_prepare + "\n")
+            docker += ["--docker-prepare", prepare.path]
+            docker_inputs.append(prepare)
+        for arg in ctx.attr.docker_args:
+            docker += ["--docker-arg", arg]
+
     ctx.actions.run(
         executable = ctx.executable._script,
         arguments = [
@@ -38,9 +53,10 @@ def _native_image_impl(ctx):
             arg
             for lib, name in ctx.attr.static_libs.items()
             for arg in ["--static-lib", lib.files.to_list()[0].path, name]
-        ] + ["--"] + ctx.attr.options,
+        ] + docker + ["--"] + ctx.attr.options,
         inputs = depset(
-            [classpath_file, ctx.file.processor_jar, ctx.file.trust_store] + ctx.files.graalvm + ctx.files.static_libs + jars,
+            [classpath_file, ctx.file.processor_jar, ctx.file.trust_store] + ctx.files.graalvm +
+            ctx.files.static_libs + docker_inputs + jars,
         ),
         outputs = [output],
         mnemonic = "NativeImage",
@@ -67,6 +83,15 @@ native_image = rule(
         "native_image": attr.label(mandatory = True, allow_single_file = True),
         "processor_jar": attr.label(mandatory = True, allow_single_file = True, doc = "scala3-graal-processor deploy JAR"),
         "trust_store": attr.label(mandatory = True, allow_single_file = True),
+        "docker_image": attr.string(
+            doc = "Build in this linux/amd64 Docker image (Mill: nativeImageDockerParams.imageName)",
+        ),
+        "docker_context": attr.label_list(
+            allow_files = True,
+            doc = "Files of a Docker build context: `docker build -t <docker_image>` it first",
+        ),
+        "docker_prepare": attr.string(doc = "Shell commands run in the container before native-image"),
+        "docker_args": attr.string_list(doc = "native-image arguments only used in Docker (extraNativeImageArgs)"),
         "static_libs": attr.label_keyed_string_dict(
             allow_files = True,
             doc = "Static libraries to link (-H:CLibraryPath), mapped to their file name there",
@@ -74,3 +99,21 @@ native_image = rule(
         "_script": attr.label(default = ":native_image.sh", executable = True, cfg = "exec", allow_single_file = True),
     },
 )
+
+def scala_cli_native_image(name, **kwargs):
+    """A Scala CLI native image (`native_image` with the settings common to every launcher kind).
+
+    Args:
+      name: target name.
+      **kwargs: passed to native_image.
+    """
+    native_image(
+        name = name,
+        main_class = "scala.cli.ScalaCli",
+        processor_jar = "//bazel/native-image:graal_processor_deploy.jar",
+        # Several GB of RAM, minutes of CPU: only built when asked for.
+        tags = ["manual"],
+        trust_store = "//bazel/native-image:trust_store",
+        visibility = ["//visibility:public"],
+        **kwargs
+    )

@@ -29,6 +29,8 @@ Use [Bazelisk](https://github.com/bazelbuild/bazelisk) (`brew install bazelisk`,
 | `./mill -i copyJvmBootstrappedLauncher --directory artifacts/`       | `bazel build //modules/cli:scala-cli-bootstrapped-jar` → `bazel-bin/modules/cli/launchers/bootstrapped/scala-cli.jar`                           |
 | `./mill -i show 'cli[]'.nativeImage`                                 | `bazel build //modules/cli:scala-cli-native` → `bazel-bin/modules/cli/native/scala-cli`  |
 | `./mill -i integration.test.native`                                  | `bazel test //modules/integration:native`                                               |
+| `./mill -i show 'cli[]'.nativeImageStatic` / `nativeImageMostlyStatic` | `bazel build //modules/cli:scala-cli-native-static` / `:scala-cli-native-mostly-static` |
+| `integration.test.nativeStatic` / `nativeMostlyStatic`              | `bazel test //modules/integration:native-static` / `:native-mostly-static` (and `-prebuilt`) |
 | `nativeIntegrationTests` + `SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY`  | `bazel test //modules/integration:native-prebuilt --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=/abs/scala-cli` |
 | `./mill -i --define scala.version.internal=X …`                      | `bazel … --repo_env=SCALA_VERSION=X` (X must be listed in `scala_config` in MODULE.bazel) |
 | `./mill -i clean`                                                    | not needed (outputs are content-addressed); `bazel clean` only as a last resort          |
@@ -87,6 +89,10 @@ block CI or releases.
 | `linux / native-linux-tests-default`          | `bazel / native-linux-tests-default`           |
 | `macos / native-macos-tests-default`          | `bazel / native-macos-tests-default`           |
 | `windows / native-windows-tests-default`      | `bazel / native-windows-tests-default`         |
+| `static / generate-static-launcher`           | `bazel / generate-static-launcher`             |
+| `static / native-static-tests-default`        | `bazel / native-static-tests-default`          |
+| `mostly-static / generate-mostly-static-launcher` | `bazel / generate-mostly-static-launcher`  |
+| `mostly-static / native-mostly-static-tests-default` | `bazel / native-mostly-static-tests-default` |
 | `macos / native-macos-arm64-tests-default`    | `bazel / native-macos-arm64-tests-default`     |
 
 Paired jobs share their job id and the names of equivalent steps (`Cross compile
@@ -147,6 +153,8 @@ action, several GB of RAM).
 | macOS x64       | 25.0.1 (no newer x64 build, as in Mill) | built and tested locally, under Rosetta |
 | Linux x64 / arm64 | 25.0.2 | CI only (shadow jobs) |
 | Windows x64     | 25.0.2  | CI only (shadow jobs) |
+| Linux x64 static (musl), `scala-cli-native-static` | 25.0.2 | built locally (Docker, amd64 via Rosetta in Colima) |
+| Linux x64 mostly static, `scala-cli-native-mostly-static` | 25.0.2 | built and run locally (Docker, amd64 via Rosetta in Colima) |
 
 * The GraalVM is the host's by default. Force another one with
   `--//bazel/native-image:graalvm_platform=<platform>`, e.g. `macos-x64` to build the
@@ -154,6 +162,15 @@ action, several GB of RAM).
   flag: switching it rebuilds `bazel-bin/modules/cli/native/scala-cli`.
 * On Linux the binary links against the host glibc (Mill builds it in an ubuntu:24.04
   container on CI; the shadow job builds on an ubuntu-24.04 runner).
+* The static and mostly-static images (Mill: `cli[].static-image`,
+  `cli[].mostly-static-image`) are built in linux/amd64 Docker containers like Mill's
+  (`nativeImageDockerParams`): the musl builder image is built from `project/musl-image`
+  (static) or `ubuntu:24.04` is used (mostly static), with the same prepare commands,
+  extra native-image arguments and static libraries (Alpine `libsodium.a`,
+  `libsodiumjni.a`). The pinned Linux x64 GraalVM is mounted read-only instead of being
+  installed in the container, and the work directory sits in Bazel's output base, which
+  the Docker daemon must be able to mount (Colima / Docker Desktop share `$HOME`). On
+  Apple Silicon, enable amd64 emulation (e.g. `colima start --vz-rosetta`).
 * On Windows, like the mill-native-image plugin, `native-image.cmd` runs after
   Visual Studio's `vcvars64.bat` (found in the usual locations, or `VCVARSALL`), and the
   image links the static `sodium.lib`, `sodiumjni.lib` and `csjniutils.lib`
@@ -162,8 +179,8 @@ action, several GB of RAM).
 
 ## Not migrated yet (still Mill only)
 
-* The static / mostly-static (Docker) native images, and the native-static and docker
-  integration tests.
+* The docker integration tests (`integration.docker.test`, `integration.docker-slim.test`)
+  and the Docker image publishing that follow the static / mostly-static jobs.
 * `build-macros[_].test.testNegativeCompilation` (uses `scala-cli` from `PATH`).
 * `__.fix` (scalafix), `__.checkNativeImageConfFormat`, `ci.checkScalaVersions`.
 * Cross-builds for other Scala versions / release candidates, `docJar`.

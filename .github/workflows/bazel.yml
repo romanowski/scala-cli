@@ -242,7 +242,7 @@ jobs:
           exit 1
         )
 
-  # linux.yml: generate-linux-launcher / macos.yml: generate-macos-arm64-launcher
+  # linux.yml / macos.yml / windows.yml / static.yml / mostly-static.yml: generate-*-launcher
   # (Mill builds the Linux one in an ubuntu:24.04 Docker container; Bazel builds it
   # directly on the ubuntu-24.04 runner.)
   generate-native-launcher:
@@ -258,6 +258,9 @@ jobs:
           - { job: generate-macos-launcher, os: macOS-15-intel, artifact: bazel-macos-launchers }
           - { job: generate-macos-arm64-launcher, os: macOS-15, artifact: bazel-macos-arm64-launchers }
           - { job: generate-windows-launcher, os: windows-2025, artifact: bazel-windows-launchers }
+          # static.yml / mostly-static.yml (built in linux/amd64 Docker containers)
+          - { job: generate-static-launcher, os: ubuntu-24.04, artifact: bazel-static-launchers, target: scala-cli-native-static }
+          - { job: generate-mostly-static-launcher, os: ubuntu-24.04, artifact: bazel-mostly-static-launchers, target: scala-cli-native-mostly-static }
     env:
       SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
     steps:
@@ -286,9 +289,10 @@ jobs:
       run: |
         startup=()
         if [[ "$RUNNER_OS" == "Windows" ]]; then startup=(--output_user_root=C:/b); fi
-        bazel "${startup[@]}" build $BAZEL_FLAGS //modules/cli:scala-cli-native
+        target="//modules/cli:${{ matrix.target || 'scala-cli-native' }}"
+        bazel "${startup[@]}" build $BAZEL_FLAGS "$target"
         mkdir -p artifacts
-        launcher="$(bazel "${startup[@]}" cquery $BAZEL_FLAGS --output=files //modules/cli:scala-cli-native 2>/dev/null)"
+        launcher="$(bazel "${startup[@]}" cquery $BAZEL_FLAGS --output=files "$target" 2>/dev/null)"
         cp "$launcher" "artifacts/$(basename "$launcher")"
         chmod +x artifacts/*
         ls -la artifacts/
@@ -300,7 +304,8 @@ jobs:
         if-no-files-found: error
         retention-days: 2
 
-  # linux.yml: native-linux-tests-default / macos.yml: native-macos-arm64-tests-default
+  # linux.yml / macos.yml / windows.yml: native-*-tests-default,
+  # static.yml / mostly-static.yml: native-{static,mostly-static}-tests-default
   native-tests:
     name: ${{ matrix.job }}
     needs: [generate-native-launcher]
@@ -315,6 +320,8 @@ jobs:
           - { job: native-macos-tests-default, os: macOS-15-intel, artifact: bazel-macos-launchers }
           - { job: native-macos-arm64-tests-default, os: macOS-15, artifact: bazel-macos-arm64-launchers }
           - { job: native-windows-tests-default, os: windows-2025, artifact: bazel-windows-launchers }
+          - { job: native-static-tests-default, os: ubuntu-24.04, artifact: bazel-static-launchers, target: native-static-prebuilt }
+          - { job: native-mostly-static-tests-default, os: ubuntu-24.04, artifact: bazel-mostly-static-launchers, target: native-mostly-static-prebuilt }
     env:
       SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
     steps:
@@ -371,7 +378,7 @@ jobs:
           --test_env=SCALA_CLI_IT_GROUP=1 \
           --test_env=SCALA_CLI_IT_FORCED_LAUNCHER="$launcher" \
           "${extra[@]}" \
-          //modules/integration:native-prebuilt
+          "//modules/integration:${{ matrix.target || 'native-prebuilt' }}"
     - name: Collect test reports
       if: (success() || failure()) && env.SHOULD_RUN == 'true'
       shell: bash

@@ -354,3 +354,21 @@ http_file(
     sha256 = "c5126a62daeb531c79aa9ab98c61dbb0d8da4d5d360073b109729caf5ccb5d7e",
     urls = ["https://repo1.maven.org/maven2/io/get-coursier/jniutils/windows-jni-utils/0.4.0/windows-jni-utils-0.4.0-x86_64-pc-win32.lib"],
 )
+
+# Static libraries linked into the static (musl) Linux image (CliNativeImage.staticLibDir
+# for `static-image`): libsodium from Alpine (deps.alpineVersion / alpineLibsodiumVersion)
+# and libsodiumjni.
+http_archive(
+    name = "alpine_libsodium_static",
+    build_file_content = 'exports_files(["usr/lib/libsodium.a"])',
+    sha256 = "7643127e1271c7b9427bfdbc8e3917cbe399dbf39e3695b09448c781861d0613",
+    type = "tar.gz",
+    urls = ["https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/libsodium-static-1.0.20-r1.apk"],
+)
+
+http_file(
+    name = "libsodiumjni_linux_x64_a",
+    downloaded_file_path = "libsodiumjni.a",
+    sha256 = "e82d284e7b3118e5130d4d87324cd55288664820f37a5395074b643b1fd507b7",
+    urls = ["https://repo1.maven.org/maven2/org/virtuslab/scala-cli/libsodiumjni/0.0.4/libsodiumjni-0.0.4-x86_64-pc-linux.a"],
+)

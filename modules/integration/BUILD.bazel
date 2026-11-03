@@ -86,3 +86,28 @@ scala_cli_integration_test(
     tags = ["manual"],
     timeout = "eternal",
 )
+
+# `./mill -i integration.test.nativeStatic` / `integration.test.nativeMostlyStatic`
+# (Linux x86_64), with the image built by Bazel or, as with Mill's
+# SCALA_CLI_IT_FORCED_{STATIC,MOSTLY_STATIC}_LAUNCHER_DIRECTORY, a prebuilt one.
+[
+    (
+        scala_cli_integration_test(
+            name = "native-" + kind,
+            kind = "native-" + kind,
+            launcher = "//modules/cli:scala-cli-native-" + kind,
+            lib = ":test-lib",
+            tags = ["manual"],
+            timeout = "eternal",
+        ),
+        scala_cli_integration_test(
+            name = "native-%s-prebuilt" % kind,
+            kind = "native-" + kind,
+            launcher = None,
+            lib = ":test-lib",
+            tags = ["manual"],
+            timeout = "eternal",
+        ),
+    )
+    for kind in ["static", "mostly-static"]
+]

@@ -27,3 +27,11 @@ filegroup(
     ]),
     visibility = ["//modules/docs-tests:__pkg__"],
 )
+
+# Docker build context of the musl builder image (Mill: static-image.buildHelperImage),
+# used by //modules/cli:scala-cli-native-static.
+filegroup(
+    name = "musl_image",
+    srcs = glob(["project/musl-image/*"]),
+    visibility = ["//modules/cli:__pkg__"],
+)

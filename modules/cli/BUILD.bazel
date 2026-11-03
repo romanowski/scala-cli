@@ -1,6 +1,6 @@
 load("@rules_java//java:java_library.bzl", "java_library")
 load("//bazel:defs.bzl", "scala_cli_binary", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
-load("//bazel/native-image:defs.bzl", "native_image")
+load("//bazel/native-image:defs.bzl", "scala_cli_native_image")
 
 scala_cli_constants(
     name = "constants",
@@ -148,22 +148,38 @@ scala_cli_test(
     ]
 ]
 
-# Native image (Mill: `cli[].base-image.nativeImage`, `./mill -i show 'cli[]'.nativeImage`).
-# Built directly on the host; Mill's Docker-based variants (linux-docker-image on CI,
-# static, mostly-static) aren't migrated yet.
-genrule(
-    name = "launcher_type_default",
-    outs = ["launcher_type_default/scala/cli/internal/launcher-type.txt"],
-    cmd = "printf default > $@",
-)
+# Native images (Mill: CliNativeImage in project/settings/package.mill).
 
-java_library(
-    name = "launcher_type_default_resources",
-    resource_strip_prefix = package_name() + "/launcher_type_default",
-    resources = [":launcher_type_default"],
-)
+# CliNativeImage.nativeImageOptions (-H:CLibraryPath and the trust store are added by
+# bazel/native-image/native_image.sh).
+NATIVE_IMAGE_OPTIONS = [
+    "--no-fallback",
+    "-march=compatibility",
+    "-H:IncludeResources=local-repo.zip",
+    "-H:IncludeResources=scala/cli/internal/launcher-type.txt",
+    "-H:IncludeResources=scala/cli/commands/publish/.*",
+    "-H:-ParseRuntimeOptions",
+]
 
-native_image(
+# Mill: CliNativeImage.launcherKind, written to scala/cli/internal/launcher-type.txt.
+[
+    (
+        genrule(
+            name = "launcher_type_" + kind,
+            outs = ["launcher_type_%s/scala/cli/internal/launcher-type.txt" % kind],
+            cmd = "printf %s > $@" % kind,
+        ),
+        java_library(
+            name = "launcher_type_%s_resources" % kind,
+            resource_strip_prefix = package_name() + "/launcher_type_" + kind,
+            resources = [":launcher_type_" + kind],
+        ),
+    )
+    for kind in ["default", "static", "mostly-static"]
+]
+
+# `./mill -i show 'cli[]'.nativeImage` (`cli[].base-image`): built on the host.
+scala_cli_native_image(
     name = "scala-cli-native",
     # Mill: launcher type resource, then runClasspath, then the local repository JAR.
     deps = [
@@ -172,18 +188,8 @@ native_image(
         "//bazel/local-repo",
     ],
     graalvm = "//bazel/native-image:graalvm",
-    main_class = "scala.cli.ScalaCli",
     native_image = "//bazel/native-image:native-image",
-    # CliNativeImage.nativeImageOptions (-H:CLibraryPath and the trust store are added
-    # by bazel/native-image/native_image.sh).
-    options = [
-        "--no-fallback",
-        "-march=compatibility",
-        "-H:IncludeResources=local-repo.zip",
-        "-H:IncludeResources=scala/cli/internal/launcher-type.txt",
-        "-H:IncludeResources=scala/cli/commands/publish/.*",
-        "-H:-ParseRuntimeOptions",
-    ] + select({
+    options = NATIVE_IMAGE_OPTIONS + select({
         # https://stackoverflow.com/a/61325264
         "//bazel/tools:linux_arm64": [
             "-Djdk.lang.Process.launchMechanism=vfork",
@@ -195,7 +201,6 @@ native_image(
         "//bazel/native-image:windows": "native/scala-cli.exe",
         "//conditions:default": "native/scala-cli",
     }),
-    processor_jar = "//bazel/native-image:graal_processor_deploy.jar",
     # CliNativeImage.staticLibDir (Windows): libsodium, libsodiumjni, coursier jni-utils
     static_libs = select({
         "//bazel/native-image:windows": {
@@ -205,7 +210,62 @@ native_image(
         },
         "//conditions:default": {},
     }),
-    tags = ["manual"],
-    trust_store = "//bazel/native-image:trust_store",
-    visibility = ["//visibility:public"],
+)
+
+# Commands run in the container before native-image (Mill: setupLocaleAndOptions).
+DOCKER_LOCALE_SETUP = """
+set -v
+apt-get update
+apt-get install -q -y locales
+locale-gen en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US:en
+export LC_ALL=en_US.UTF-8
+"""
+
+# `./mill -i show 'cli[]'.nativeImageStatic` (`cli[].static-image`): static musl binary,
+# built in Docker (linux/amd64) with the scala-cli-base-musl image (project/musl-image).
+scala_cli_native_image(
+    name = "scala-cli-native-static",
+    deps = [
+        ":launcher_type_static_resources",
+        ":cli",
+        "//bazel/local-repo",
+    ],
+    docker_args = [
+        "--static",
+        "--libc=musl",
+    ],
+    docker_context = ["//:musl_image"],
+    docker_image = "scala-cli-base-musl:latest",
+    # NativeImage.linuxStaticParams
+    docker_prepare = """(cd /usr/local/musl/bin && ln -s *-musl-gcc musl-gcc) && export PATH="/usr/local/musl/bin:$PATH"
+""" + DOCKER_LOCALE_SETUP,
+    graalvm = "@graalvm_linux_x64//:files",
+    native_image = "@graalvm_linux_x64//:bin/native-image",
+    options = NATIVE_IMAGE_OPTIONS + ["-J-Dscala-cli.static-launcher=true"],
+    output_name = "native-static/scala-cli",
+    static_libs = {
+        "@alpine_libsodium_static//:usr/lib/libsodium.a": "libsodium.a",
+        "@libsodiumjni_linux_x64_a//file": "libsodiumjni.a",
+    },
+)
+
+# `./mill -i show 'cli[]'.nativeImageMostlyStatic` (`cli[].mostly-static-image`): only
+# libc linked dynamically, built in Docker (linux/amd64, ubuntu:24.04).
+scala_cli_native_image(
+    name = "scala-cli-native-mostly-static",
+    deps = [
+        ":launcher_type_mostly-static_resources",
+        ":cli",
+        "//bazel/local-repo",
+    ],
+    docker_args = ["-H:+StaticExecutableWithDynamicLibC"],
+    docker_image = "ubuntu:24.04",
+    # NativeImage.linuxMostlyStaticParams
+    docker_prepare = "apt-get update -q -y && apt-get install -q -y build-essential libz-dev\n" + DOCKER_LOCALE_SETUP,
+    graalvm = "@graalvm_linux_x64//:files",
+    native_image = "@graalvm_linux_x64//:bin/native-image",
+    options = NATIVE_IMAGE_OPTIONS,
+    output_name = "native-mostly-static/scala-cli",
 )
