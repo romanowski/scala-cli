@@ -4,7 +4,6 @@ load("//bazel:defs.bzl", "scala_cli_binary", "workspace_binary")
 scala_cli_binary(
     name = "generate-reference-doc-bin",
     srcs = glob(["src/main/scala/**/*.scala"]),
-    env = {"SCALA_CLI_POWER": "true"},
     main_class = "scala.cli.doc.GenerateReferenceDoc",
     deps = [
         "//modules/cli",
@@ -18,4 +17,5 @@ scala_cli_binary(
 workspace_binary(
     name = "generate-reference-doc",
     binary = ":generate-reference-doc-bin",
+    env = {"SCALA_CLI_POWER": "true"},  # forkEnv in build.mill
 )

@@ -179,7 +179,11 @@ def scala_cli_integration_test(name, lib, launcher, kind, shard_count = 1, tags 
     )
 
 def workspace_binary(name, binary, **kwargs):
-    """`bazel run :<name>` runs `binary` from the workspace root (like `./mill <module>.run`)."""
+    """`bazel run :<name>` runs `binary` from the workspace root (like `./mill <module>.run`).
+
+    Pass `env` here (Mill's `forkEnv`): the `env` of `binary` itself only applies when
+    it's run directly.
+    """
     sh_binary(
         name = name,
         srcs = ["//bazel/tools:run_in_workspace.sh"],

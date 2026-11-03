@@ -40,8 +40,10 @@ def _native_image_impl(ctx):
         for arg in ctx.attr.docker_args:
             docker += ["--docker-arg", arg]
 
-    ctx.actions.run(
-        executable = ctx.executable._script,
+    # run_shell: Bazel runs it with bash on every OS (Windows can't execute a .sh file).
+    ctx.actions.run_shell(
+        command = 'bash %s "$@"' % ctx.file._script.path,
+        tools = [ctx.file._script],
         arguments = [
             ctx.file.native_image.path,
             ctx.file.processor_jar.path,
@@ -96,7 +98,7 @@ native_image = rule(
             allow_files = True,
             doc = "Static libraries to link (-H:CLibraryPath), mapped to their file name there",
         ),
-        "_script": attr.label(default = ":native_image.sh", executable = True, cfg = "exec", allow_single_file = True),
+        "_script": attr.label(default = ":native_image.sh", cfg = "exec", allow_single_file = True),
     },
 )
 
