@@ -14,6 +14,9 @@ bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.0.0")
 
+# Already in the graph via rules_scala; direct so that .bazelrc can set its prebuilt protoc flag.
+bazel_dep(name = "protobuf", version = "33.4")
+
 # --- Scala toolchain ---------------------------------------------------------
 # Scala.scala3Next / Scala.defaultInternal in project/deps/package.mill.
 # Override for a whole build with --repo_env=SCALA_VERSION=<one of scala_versions>,

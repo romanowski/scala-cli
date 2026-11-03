@@ -10,6 +10,10 @@ common --tool_java_language_version=17
 # Version / VCS values for the generated Constants.scala files (STABLE_ keys only).
 common --workspace_status_command=bazel/workspace_status.sh
 
+# Use protobuf's prebuilt protoc (for rules_scala's worker) instead of compiling it, and
+# its C++ dependencies (zlib, abseil...), from source. Default from protobuf v34.
+common --@protobuf//bazel/toolchains:prefer_prebuilt_protoc
+
 build --incompatible_strict_action_env
 # Mill compiles against the full transitive class path; do the same for Java.
 build --experimental_strict_java_deps=off

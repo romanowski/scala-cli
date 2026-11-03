@@ -79,16 +79,16 @@ jobs:
     # Mill: `copyJvmLauncher` + `copyJvmBootstrappedLauncher`
     - name: Copy launcher
       if: env.SHOULD_RUN == 'true'
-      run: bazel build $BAZEL_FLAGS //modules/cli:scala-cli-standalone-jar //modules/cli:scala-cli-bootstrapped-jar
+      run: .github/scripts/bazel-retry.sh build $BAZEL_FLAGS //modules/cli:scala-cli-standalone-jar //modules/cli:scala-cli-bootstrapped-jar
     # Mill: `./mill -i '__[_].compile'`
     - name: Cross compile everything
       if: env.SHOULD_RUN == 'true'
-      run: bazel build $BAZEL_FLAGS //...
+      run: .github/scripts/bazel-retry.sh build $BAZEL_FLAGS //...
     # Mill: `./mill -i unitTests`
     - name: Unit tests
       if: env.SHOULD_RUN == 'true'
       run: >
-        bazel test $BAZEL_FLAGS
+        .github/scripts/bazel-retry.sh test $BAZEL_FLAGS
         --test_env=JAVA_HOME=$JAVA_HOME_17_X64
         --test_env=SCALA_CLI_TESTS_HOST_JAVA_HOME=$JAVA_HOME_25_X64
         //:unit_tests
@@ -150,7 +150,7 @@ jobs:
     - name: JVM integration tests
       if: env.SHOULD_RUN == 'true'
       run: >
-        bazel test $BAZEL_FLAGS
+        .github/scripts/bazel-retry.sh test $BAZEL_FLAGS
         --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI
         --test_env=SCALA_CLI_IT_GROUP=${{ matrix.group }}
         //modules/integration:${{ matrix.target }}
@@ -196,7 +196,7 @@ jobs:
     - name: Test documentation
       if: env.SHOULD_RUN == 'true'
       run: >
-        bazel test $BAZEL_FLAGS
+        .github/scripts/bazel-retry.sh test $BAZEL_FLAGS
         --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI
         //modules/docs-tests:test
     - name: Collect test reports
@@ -235,7 +235,7 @@ jobs:
     - name: Check that reference doc is up-to-date
       if: env.SHOULD_RUN == 'true'
       run: |
-        bazel run $BAZEL_FLAGS //modules/generate-reference-doc -- --check || (
+        .github/scripts/bazel-retry.sh run $BAZEL_FLAGS //modules/generate-reference-doc -- --check || (
           echo "Reference doc is not up-to-date. Run"
           echo "  bazel run //modules/generate-reference-doc"
           echo "to update it, then commit the result."
@@ -290,7 +290,7 @@ jobs:
         startup=()
         if [[ "$RUNNER_OS" == "Windows" ]]; then startup=(--output_user_root=C:/b); fi
         target="//modules/cli:${{ matrix.target || 'scala-cli-native' }}"
-        bazel "${startup[@]}" build $BAZEL_FLAGS "$target"
+        .github/scripts/bazel-retry.sh "${startup[@]}" build $BAZEL_FLAGS "$target"
         mkdir -p artifacts
         launcher="$(bazel "${startup[@]}" cquery $BAZEL_FLAGS --output=files "$target" 2>/dev/null)"
         cp "$launcher" "artifacts/$(basename "$launcher")"
@@ -373,7 +373,7 @@ jobs:
                  --test_env=USERPROFILE --test_env=LOCALAPPDATA --test_env=APPDATA --test_env=TEMP --test_env=TMP)
         fi
         chmod +x artifacts/*
-        bazel "${startup[@]}" test $BAZEL_FLAGS \
+        .github/scripts/bazel-retry.sh "${startup[@]}" test $BAZEL_FLAGS \
           --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI \
           --test_env=SCALA_CLI_IT_GROUP=1 \
           --test_env=SCALA_CLI_IT_FORCED_LAUNCHER="$launcher" \
