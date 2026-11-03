@@ -170,7 +170,12 @@ def scala_cli_integration_test(name, lib, launcher, kind, shard_count = 1, tags 
             "$(rootpath %s)" % launcher if launcher else "-",
         ],
         # cs: Constants.cs of the integration tests (fetching JVMs...)
-        data = [":" + runner, "//:scala-cli.sh", "//bazel/tools:cs"] + ([launcher] if launcher else []),
+        data = [
+            ":" + runner,
+            "//:.github/scripts/docker/ScalaCliSlimDockerFile",
+            "//:scala-cli.sh",
+            "//bazel/tools:cs",
+        ] + ([launcher] if launcher else []),
         shard_count = shard_count,
         # Runs the CLI as a subprocess: downloads compilers / JVMs, starts Bloop,
         # sometimes Docker; not sandbox-friendly. Each run / shard has its own Scala CLI

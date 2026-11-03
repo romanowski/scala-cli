@@ -41,6 +41,9 @@ on:
 
 env:
   BAZEL_FLAGS: --config=ci
+  # Binaries link to the upstream repository (issues, updates, docs), also when built
+  # on a fork, which tests (reference doc, experimental feature warnings) expect.
+  SCALA_CLI_GH_REPOSITORY: VirtusLab/scala-cli
 
 jobs:
   # Compiles everything the Linux jobs below need, once, and saves it as the shared
@@ -84,6 +87,9 @@ jobs:
     runs-on: ubuntu-24.04
     continue-on-error: true
     env:
+      # UTF-8 locale for tests (non-ASCII file names...), as Mill's CI runs have
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true') && inputs.test_skip != 'true' }}
     steps:
     - name: Log skip reason
@@ -159,6 +165,9 @@ jobs:
           - { job: jvm-tests-legacy-lts, target: jvm, group: 6, legacy_lts: true }
           - { job: jvm-bootstrapped-tests-default, target: jvmBootstrapped, group: 1 }
     env:
+      # UTF-8 locale for tests (non-ASCII file names...), as Mill's CI runs have
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_integration == 'true') && inputs.test_skip != 'true' && (!matrix.legacy_lts || inputs.test_legacy_lts == 'true') }}
     steps:
     - name: Log skip reason
@@ -211,6 +220,9 @@ jobs:
     runs-on: ubuntu-24.04
     continue-on-error: true
     env:
+      # UTF-8 locale for tests (non-ASCII file names...), as Mill's CI runs have
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.docs == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_docs == 'true') && inputs.test_skip != 'true' }}
     steps:
     - name: Log skip reason
@@ -287,9 +299,6 @@ jobs:
     # Mill: `./mill -i 'generate-reference-doc[]'.run --check`
     - name: Check that reference doc is up-to-date
       if: env.SHOULD_RUN == 'true'
-      env:
-        # the committed docs link to the upstream repository, also when checked on a fork
-        SCALA_CLI_GH_REPOSITORY: VirtusLab/scala-cli
       run: |
         .github/scripts/bazel-retry.sh run $BAZEL_FLAGS //modules/generate-reference-doc -- --check || (
           echo "Reference doc is not up-to-date. Run"
@@ -428,6 +437,10 @@ jobs:
           launcher="$(cygpath -m "$PWD/artifacts/scala-cli.exe")"
           # as in windows.yml
           extra=(--test_env=COURSIER_JNI=force --test_env=SCALA_CLI_SODIUM_JNI_ALLOW=false)
+        fi
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          # UTF-8 locale for the native launcher (non-ASCII file names...)
+          export LANG=C.UTF-8 LC_ALL=C.UTF-8
         fi
         chmod +x artifacts/*
         .github/scripts/bazel-retry.sh "${startup[@]}" test $BAZEL_FLAGS \

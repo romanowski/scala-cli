@@ -6,7 +6,8 @@
 set -euo pipefail
 
 runner="$PWD/$1"
-launcher="$PWD/$2"
+# the standalone launcher (a self-contained file, copied into Docker images by GifTests)
+launcher="$(readlink -f "$PWD/$2" 2>/dev/null || echo "$PWD/$2")"
 shift 2
 
 base="${TEST_TMPDIR}/working-dir"

@@ -40,12 +40,12 @@ sh_test(
     srcs = ["//bazel/tools:docs_test.sh"],
     args = [
         "$(rootpath :test-runner)",
-        "$(rootpath //modules/cli:scala-cli-standalone)",
+        "$(rootpath //modules/cli:scala-cli-standalone-launcher)",
     ],
     data = [
         ":test-runner",
         "//:docs_test_data",
-        "//modules/cli:scala-cli-standalone",
+        "//modules/cli:scala-cli-standalone-launcher",
     ],
     tags = [
         "no-sandbox",

@@ -1,6 +1,8 @@
 # Bazel build for Scala CLI (alongside Mill during the migration, see bazel/README.md).
 
 exports_files([
+    # Constants.mostlyStaticDockerfile of the integration tests
+    ".github/scripts/docker/ScalaCliSlimDockerFile",
     "scala-cli.sh",
     "maven_install.json",
 ])
