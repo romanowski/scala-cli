@@ -22,7 +22,9 @@ if [[ -z "$version" ]]; then
   fi
 fi
 
-gh_repo="${GITHUB_REPOSITORY:-VirtusLab/scala-cli}"
+# GitHub repository of the binaries (issue / update links, reference docs): an explicit
+# SCALA_CLI_GH_REPOSITORY, else the CI repository (as Mill reads the CI's git remote).
+gh_repo="${SCALA_CLI_GH_REPOSITORY:-${GITHUB_REPOSITORY:-VirtusLab/scala-cli}}"
 
 echo "STABLE_SCALA_CLI_VERSION ${version}"
 echo "STABLE_SCALA_CLI_GH_ORG ${gh_repo%%/*}"

@@ -287,6 +287,9 @@ jobs:
     # Mill: `./mill -i 'generate-reference-doc[]'.run --check`
     - name: Check that reference doc is up-to-date
       if: env.SHOULD_RUN == 'true'
+      env:
+        # the committed docs link to the upstream repository, also when checked on a fork
+        SCALA_CLI_GH_REPOSITORY: VirtusLab/scala-cli
       run: |
         .github/scripts/bazel-retry.sh run $BAZEL_FLAGS //modules/generate-reference-doc -- --check || (
           echo "Reference doc is not up-to-date. Run"

@@ -167,14 +167,18 @@ if [[ -z "$vcvars" ]]; then
 fi
 [[ -n "$vcvars" ]] || { echo "vcvars64.bat not found (set VCVARSALL)" >&2; exit 1; }
 
-quote_cmd() { if [[ "$1" == *" "* ]]; then printf '"%s"' "$1"; else printf '%s' "$1"; fi; }
+# The arguments (a class path of ~175 JARs) exceed cmd.exe's 8191 character limit:
+# pass them in a Java argument file (`native-image @file`), quoted, with forward slashes.
+argfile="$work/native-image.args"
+for a in "${args[@]}"; do
+  a="${a//\\/\\\\}"
+  printf '"%s"\n' "${a//\"/\\\"}"
+done > "$argfile"
 script="$work/run-native-image.bat"
 {
   echo "chcp 437"
   echo "@call \"$(cygpath -w "$vcvars")\""
   echo "if %errorlevel% neq 0 exit /b %errorlevel%"
-  printf '@call %s' "$(quote_cmd "$(cygpath -w "$native_image")")"
-  for a in "${args[@]}"; do printf ' %s' "$(quote_cmd "$a")"; done
-  echo
+  echo "@call \"$(cygpath -w "$native_image")\" \"@$(cygpath -m "$argfile")\""
 } > "$script"
 cmd //c "$(cygpath -w "$script")"
