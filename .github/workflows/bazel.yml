@@ -43,9 +43,44 @@ env:
   BAZEL_FLAGS: --config=ci
 
 jobs:
+  # Compiles everything the Linux jobs below need, once, and saves it as the shared
+  # "shared-linux" disk cache, which they restore instead of compiling it again.
+  build:
+    timeout-minutes: 120
+    runs-on: ubuntu-24.04
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.docs == 'true' || inputs.test_all == 'true' || inputs.test_integration == 'true' || inputs.test_docs == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping the shared Bazel build -- changes do not affect code, docs, or CI."
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: shared-linux
+        repository-cache: true
+    - name: Build everything
+      if: env.SHOULD_RUN == 'true'
+      run: >
+        .github/scripts/bazel-retry.sh build $BAZEL_FLAGS
+        //...
+        //modules/integration:jvm
+        //modules/integration:jvmBootstrapped
+        //modules/integration:native-prebuilt
+        //modules/integration:native-static-prebuilt
+        //modules/integration:native-mostly-static-prebuilt
+        //modules/docs-tests:test
+        //modules/generate-reference-doc
+
   # jvm.yml: unit-tests
   unit-tests:
     timeout-minutes: 120
+    needs: [build]
     runs-on: ubuntu-24.04
     continue-on-error: true
     env:
@@ -74,7 +109,8 @@ jobs:
       if: env.SHOULD_RUN == 'true'
       with:
         bazelisk-cache: true
-        disk-cache: ${{ github.workflow }}-unit-tests
+        disk-cache: shared-linux
+        cache-save: false
         repository-cache: true
     # Mill: `copyJvmLauncher` + `copyJvmBootstrappedLauncher`
     - name: Copy launcher
@@ -107,6 +143,7 @@ jobs:
   jvm-tests:
     name: ${{ matrix.job }}
     timeout-minutes: 180
+    needs: [build]
     runs-on: ubuntu-24.04
     continue-on-error: true
     strategy:
@@ -144,7 +181,8 @@ jobs:
       if: env.SHOULD_RUN == 'true'
       with:
         bazelisk-cache: true
-        disk-cache: ${{ github.workflow }}-jvm-tests
+        disk-cache: shared-linux
+        cache-save: false
         repository-cache: true
     # Mill: `./mill -i integration.test.jvm` / `integration.test.jvmBootstrapped`
     - name: JVM integration tests
@@ -169,6 +207,7 @@ jobs:
   # misc.yml: docs-tests
   docs-tests:
     timeout-minutes: 120
+    needs: [build]
     runs-on: ubuntu-24.04
     continue-on-error: true
     env:
@@ -201,7 +240,8 @@ jobs:
       if: env.SHOULD_RUN == 'true'
       with:
         bazelisk-cache: true
-        disk-cache: ${{ github.workflow }}-docs-tests
+        disk-cache: shared-linux
+        cache-save: false
         repository-cache: true
     # Mill: `./mill -i 'docs-tests[]'.test`
     - name: Test documentation
@@ -224,6 +264,7 @@ jobs:
   # misc.yml: reference-doc
   reference-doc:
     timeout-minutes: 60
+    needs: [build]
     runs-on: ubuntu-24.04
     continue-on-error: true
     env:
@@ -240,7 +281,8 @@ jobs:
       if: env.SHOULD_RUN == 'true'
       with:
         bazelisk-cache: true
-        disk-cache: ${{ github.workflow }}-reference-doc
+        disk-cache: shared-linux
+        cache-save: false
         repository-cache: true
     # Mill: `./mill -i 'generate-reference-doc[]'.run --check`
     - name: Check that reference doc is up-to-date
@@ -291,7 +333,8 @@ jobs:
       if: env.SHOULD_RUN == 'true'
       with:
         bazelisk-cache: true
-        disk-cache: ${{ github.workflow }}-${{ matrix.job }}
+        disk-cache: ${{ matrix.os == 'ubuntu-24.04' && 'shared-linux' || format('{0}-{1}', github.workflow, matrix.job) }}
+        cache-save: ${{ matrix.os != 'ubuntu-24.04' }}
         repository-cache: true
     # Mill: .github/scripts/generate-native-image.sh (`cli[].base-image.nativeImage`)
     - name: Generate native launcher
@@ -361,7 +404,8 @@ jobs:
       if: env.SHOULD_RUN == 'true'
       with:
         bazelisk-cache: true
-        disk-cache: ${{ github.workflow }}-native-tests
+        disk-cache: ${{ matrix.os == 'ubuntu-24.04' && 'shared-linux' || format('{0}-{1}', github.workflow, matrix.job) }}
+        cache-save: ${{ matrix.os != 'ubuntu-24.04' }}
         repository-cache: true
     - uses: actions/download-artifact@v8
       if: env.SHOULD_RUN == 'true'
