@@ -17,8 +17,12 @@ export SCALA_CLI_CONFIG="$base/config/config.json"
 export SCALA_CLI_EXAMPLES="$PWD/examples"
 export SCALA_CLI_GIF_SCENARIOS="$PWD/gifs/scenarios"
 export SCALA_CLI_WEBSITE_IMG="$PWD/website/static/img"
-export SCALA_CLI_GIF_RENDERER_DOCKER_DIR="$PWD/gifs"
-export SCALA_CLI_SVG_RENDERER_DOCKER_DIR="$PWD/gifs/svg_render"
+# Docker build contexts: Docker doesn't follow the symlinks of the runfiles tree, so copy
+# them with symlinks resolved.
+gifs="$base/gifs"
+cp -RL "$PWD/gifs" "$gifs"
+export SCALA_CLI_GIF_RENDERER_DOCKER_DIR="$gifs"
+export SCALA_CLI_SVG_RENDERER_DOCKER_DIR="$gifs/svg_render"
 export JAVA_RUNFILES="${TEST_SRCDIR}"
 
 exec "$runner" "$@"

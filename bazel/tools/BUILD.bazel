@@ -49,6 +49,9 @@ java_binary(
 )
 
 exports_files([
+    # Shell preamble of Mill's `cli[].standaloneLauncher` (a coursier launcher): runs the
+    # JAR appended to it with `java -jar "$0"`.
+    "standalone-launcher-preamble.sh",
     "docs_test.sh",
     "integration_test.sh",
     "run_in_workspace.sh",

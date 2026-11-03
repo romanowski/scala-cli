@@ -35,6 +35,9 @@ test:ci --test_timeout=-1,-1,-1,10200
 
 try-import %workspace%/user.bazelrc
 
+# Locale of the caller, as Mill's test runs inherit it (e.g. RunTests212's -encoding tests).
+test --test_env=LANG --test_env=LC_ALL
+
 # Unit tests (ScalaCliTests.forkEnv in project/settings/package.mill).
 # Tests spawn JVMs / Bloop with JAVA_HOME, which Mill pins to Temurin 17. Pass a JDK 17
 # explicitly (CI does), or set it once in user.bazelrc:

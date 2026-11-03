@@ -142,7 +142,8 @@ scala_cli_test(
         ),
     )
     for name, kind in [
-        # `cli[].standaloneLauncher` / `./mill -i copyJvmLauncher`
+        # `cli[].standaloneLauncher` / `./mill -i copyJvmLauncher`: see also
+        # :scala-cli-standalone-launcher below
         ("scala-cli-standalone", "jvm.standaloneLauncher"),
         # `cliBootstrapped.jar` / `./mill -i copyJvmBootstrappedLauncher`
         ("scala-cli-bootstrapped", "jvm.bootstrapped"),
@@ -269,4 +270,19 @@ scala_cli_native_image(
     native_image = "@graalvm_linux_x64//:bin/native-image",
     options = NATIVE_IMAGE_OPTIONS,
     output_name = "native-mostly-static/scala-cli",
+)
+
+# `cli[].standaloneLauncher` itself: the standalone JAR with Mill's (coursier's) shell
+# preamble, so that it's directly executable. The CLI detects the preamble and then refers
+# to itself by this path alone (e.g. in BSP connection files) rather than `java -jar ...`.
+genrule(
+    name = "scala-cli-standalone-launcher",
+    srcs = [
+        "//bazel/tools:standalone-launcher-preamble.sh",
+        ":scala-cli-standalone-jar",
+    ],
+    outs = ["launchers/standalone/scala-cli"],
+    cmd = "cat $(location //bazel/tools:standalone-launcher-preamble.sh) $(location :scala-cli-standalone-jar) > $@ && chmod +x $@",
+    executable = True,
+    visibility = ["//visibility:public"],
 )

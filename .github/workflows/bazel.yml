@@ -115,7 +115,7 @@ jobs:
     # Mill: `copyJvmLauncher` + `copyJvmBootstrappedLauncher`
     - name: Copy launcher
       if: env.SHOULD_RUN == 'true'
-      run: .github/scripts/bazel-retry.sh build $BAZEL_FLAGS //modules/cli:scala-cli-standalone-jar //modules/cli:scala-cli-bootstrapped-jar
+      run: .github/scripts/bazel-retry.sh build $BAZEL_FLAGS //modules/cli:scala-cli-standalone-launcher //modules/cli:scala-cli-bootstrapped-jar
     # Mill: `./mill -i '__[_].compile'`
     - name: Cross compile everything
       if: env.SHOULD_RUN == 'true'

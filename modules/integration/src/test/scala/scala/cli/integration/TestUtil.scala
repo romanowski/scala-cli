@@ -18,6 +18,15 @@ import scala.util.{Properties, Try}
 
 object TestUtil {
 
+  /** A classpath resource as a file: the resource itself when it's a plain file on the class path
+    * (Mill), else a temporary copy (Bazel packs test resources in a JAR).
+    */
+  def resourceFile(name: String): os.Path = {
+    val url = Thread.currentThread().getContextClassLoader.getResource(name)
+    if url.getProtocol == "file" then os.Path(java.nio.file.Paths.get(url.toURI))
+    else os.temp(contents = url.openStream(), suffix = "-" + name.split('/').last)
+  }
+
   val cliKind: String               = sys.props("test.scala-cli.kind")
   val isNativeCli: Boolean          = cliKind.startsWith("native")
   val isNativeStaticCli: Boolean    = cliKind.startsWith("native-static")

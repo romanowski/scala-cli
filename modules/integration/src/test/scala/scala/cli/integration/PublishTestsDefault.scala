@@ -2,8 +2,6 @@ package scala.cli.integration
 
 import com.eed3si9n.expecty.Expecty.expect
 
-import java.nio.file.Paths
-
 import scala.cli.integration.TestUtil.stableStdoutOf
 
 class PublishTestsDefault extends PublishTestDefinitions with TestDefault {
@@ -207,12 +205,7 @@ class PublishTestsDefault extends PublishTestDefinitions with TestDefault {
   }
 
   test(s"simple failed upload") {
-    val secretKey = {
-      val uri = Thread.currentThread().getContextClassLoader
-        .getResource("test-keys/key.skr")
-        .toURI
-      os.Path(Paths.get(uri))
-    }
+    val secretKey = TestUtil.resourceFile("test-keys/key.skr")
 
     val signingOptions = Seq(
       "--secret-key",

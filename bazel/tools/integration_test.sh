@@ -15,6 +15,9 @@ else
   launcher="$PWD/$1"
 fi
 shift
+# The CLI reports its own path with symlinks resolved (e.g. in the BSP connection files),
+# and tests compare it with test.scala-cli.path: resolve the runfiles symlink.
+launcher="$(readlink -f "$launcher" 2>/dev/null || echo "$launcher")"
 
 base="${TEST_TMPDIR}/working-dir"
 mkdir -p "$base"
@@ -47,5 +50,9 @@ stop_bloop() {
 trap stop_bloop EXIT
 
 status=0
-"$runner" "--jvm_flag=-Dtest.scala-cli.path=$launcher" "$@" || status=$?
+# java.io.tmpdir: Bazel points it at TEST_TMPDIR, under the execution root, which is a git
+# working tree (Bazel links the workspace's .git there), changing what the CLI infers from git
+# in temporary directories (e.g. `publish`). Use a directory outside of it, as with Mill.
+mkdir -p "$cli_home/java-tmp"
+"$runner" "--jvm_flag=-Dtest.scala-cli.path=$launcher" "--jvm_flag=-Djava.io.tmpdir=$cli_home/java-tmp" "$@" || status=$?
 exit "$status"

@@ -28,6 +28,9 @@ scala_cli_test(
     tags = ["manual"],
     deps = [
         ":integration",
+        # scala.cli.config (GitHubTests): the published config_3 is excluded from the
+        # Maven resolution in favor of this module (MODULE.bazel)
+        "//modules/config",
         "@maven//:ch_epfl_scala_bsp4j",
         "@maven//:com_github_docker_java_docker_java_core",
         "@maven//:com_github_docker_java_docker_java_transport_zerodep",
@@ -45,13 +48,13 @@ scala_cli_test(
     ],
 )
 
-# `./mill -i integration.test.jvm` (JVM launcher JAR, run with `java -jar`).
+# `./mill -i integration.test.jvm` (the standalone JVM launcher, run with `java -jar`).
 # Select the CI group as with Mill: --test_env=SCALA_CLI_IT_GROUP=<n>.
 # Filter suites as with Mill: --test_filter='scala.cli.integration.RunTestsDefault'.
 scala_cli_integration_test(
     name = "jvm",
     kind = "jvm",
-    launcher = "//modules/cli:scala-cli-standalone-jar",
+    launcher = "//modules/cli:scala-cli-standalone-launcher",
     lib = ":test-lib",
     timeout = "eternal",
 )
