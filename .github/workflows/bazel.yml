@@ -375,6 +375,10 @@ jobs:
   native-tests:
     name: ${{ matrix.job }}
     needs: [generate-native-launcher]
+    # Run each entry whose launcher was built, even if another platform's launcher job
+    # failed or never got a runner (e.g. macOS arm64 capacity): a missing artifact only
+    # skips that entry.
+    if: ${{ !cancelled() }}
     timeout-minutes: 180
     runs-on: ${{ matrix.os }}
     continue-on-error: true
@@ -420,13 +424,19 @@ jobs:
         cache-save: ${{ matrix.os != 'ubuntu-24.04' }}
         repository-cache: true
     - uses: actions/download-artifact@v8
+      id: launcher
       if: env.SHOULD_RUN == 'true'
+      continue-on-error: true
       with:
         name: ${{ matrix.artifact }}
         path: artifacts/
+    - name: Skip if the launcher wasn't built
+      if: env.SHOULD_RUN == 'true' && steps.launcher.outcome != 'success'
+      shell: bash
+      run: echo "::warning::No ${{ matrix.artifact }} artifact (its launcher job failed or didn't run), skipping ${{ matrix.job }}"
     # Mill: `./mill -i nativeIntegrationTests` with SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY
     - name: Native integration tests
-      if: env.SHOULD_RUN == 'true'
+      if: env.SHOULD_RUN == 'true' && steps.launcher.outcome == 'success'
       shell: bash
       run: |
         startup=()
@@ -454,12 +464,12 @@ jobs:
           "${extra[@]}" \
           "//modules/integration:${{ matrix.target || 'native-prebuilt' }}"
     - name: Collect test reports
-      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      if: (success() || failure()) && env.SHOULD_RUN == 'true' && steps.launcher.outcome == 'success'
       shell: bash
       run: .github/scripts/collect-bazel-test-reports.sh bazel-test-reports
     - name: Upload test report
       uses: actions/upload-artifact@v7
-      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      if: (success() || failure()) && env.SHOULD_RUN == 'true' && steps.launcher.outcome == 'success'
       with:
         name: bazel-test-results-${{ matrix.job }}
         path: bazel-test-reports/
