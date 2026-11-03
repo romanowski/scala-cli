@@ -15,9 +15,13 @@ else
   launcher="$PWD/$1"
 fi
 shift
-# The CLI reports its own path with symlinks resolved (e.g. in the BSP connection files),
-# and tests compare it with test.scala-cli.path: resolve the runfiles symlink.
-launcher="$(readlink -f "$launcher" 2>/dev/null || echo "$launcher")"
+# The CLI reports its own path (BSP connection files, error messages...), and tests compare
+# it with test.scala-cli.path: pass it the way the CLI sees it, like Mill does. On Windows,
+# that's the native form (D:\...); elsewhere, the runfiles symlink resolved.
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) launcher="$(cygpath -w "$launcher")" ;;
+  *) launcher="$(readlink -f "$launcher" 2>/dev/null || echo "$launcher")" ;;
+esac
 
 base="${TEST_TMPDIR}/working-dir"
 mkdir -p "$base"
