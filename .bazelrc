@@ -55,5 +55,7 @@ test:windows --test_env=PATHEXT --test_env=SystemRoot --test_env=WINDIR --test_e
 test:windows --test_env=SystemDrive --test_env=ProgramData --test_env=ProgramFiles
 test:windows --test_env=APPDATA --test_env=LOCALAPPDATA --test_env=USERPROFILE
 test:windows --test_env=TEMP --test_env=TMP
+# WiX Toolset location (set on the CI runners), used to build .msi packages
+test:windows --test_env=WIX
 # Bazel can't execute the .sh workspace status command on Windows: go through bash.
 common:windows --workspace_status_command=bazel/workspace_status.bat
