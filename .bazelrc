@@ -28,6 +28,10 @@ common:ci --curses=no
 common:ci --show_progress_rate_limit=10
 common:ci --disk_cache=~/.cache/bazel-disk
 common:ci --repository_cache=~/.cache/bazel-repo
+# Integration test groups run serially in one JVM and can take longer than Bazel's
+# "eternal" timeout (1 hour): allow 170 minutes, within the CI jobs' 180-minute limit
+# (like the Mill jobs').
+test:ci --test_timeout=-1,-1,-1,10200
 
 try-import %workspace%/user.bazelrc
 
