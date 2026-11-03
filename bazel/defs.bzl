@@ -169,12 +169,14 @@ def scala_cli_integration_test(name, lib, launcher, kind, shard_count = 1, tags 
             "$(rootpath :%s)" % runner,
             "$(rootpath %s)" % launcher if launcher else "-",
         ],
-        data = [":" + runner, "//:scala-cli.sh"] + ([launcher] if launcher else []),
+        # cs: Constants.cs of the integration tests (fetching JVMs...)
+        data = [":" + runner, "//:scala-cli.sh", "//bazel/tools:cs"] + ([launcher] if launcher else []),
         shard_count = shard_count,
-        # Runs the CLI as a subprocess: downloads compilers / JVMs, uses the global
-        # Bloop daemon, sometimes Docker; not sandbox-friendly, and run alone (like
-        # Mill on CI; CI parallelizes across SCALA_CLI_IT_GROUP jobs instead).
-        tags = ["exclusive", "requires-network", "no-sandbox"] + tags,
+        # Runs the CLI as a subprocess: downloads compilers / JVMs, starts Bloop,
+        # sometimes Docker; not sandbox-friendly. Each run / shard has its own Scala CLI
+        # home (integration_test.sh), so shards can run in parallel:
+        # --test_sharding_strategy=forced=<n> (or shard_count).
+        tags = ["requires-network", "no-sandbox"] + tags,
         **kwargs
     )
 

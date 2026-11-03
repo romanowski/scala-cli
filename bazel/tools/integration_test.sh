@@ -24,4 +24,28 @@ export SCALA_CLI_PRINT_STACK_TRACES=1
 export SCALA_CLI_SHELL_LAUNCHER="$PWD/scala-cli.sh"
 export JAVA_RUNFILES="${TEST_SRCDIR}"
 
-exec "$runner" "--jvm_flag=-Dtest.scala-cli.path=$launcher" "$@"
+# The tests run the launcher with the `java` of the PATH: use the test JDK (JAVA_HOME),
+# as Mill's test runs do, not whatever comes first in the caller's PATH (a newer JDK
+# prints sun.misc.Unsafe warnings some tests check for).
+if [[ -n "${JAVA_HOME:-}" ]]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
+# Isolation, so that test runs / shards can run in parallel: each one gets its own
+# Scala CLI home (Bloop daemon, config, local repository...), which the CLI under test
+# inherits (SCALA_CLI_HOME, read by scala.build.Directories). The path stays short:
+# the Bloop daemon listens on a Unix domain socket under it (~104 characters max).
+# The coursier cache stays shared (coursier locks it).
+cli_home="$(mktemp -d "/tmp/scli-it.XXXXXX")"
+export SCALA_CLI_HOME="$cli_home"
+
+stop_bloop() {
+  # Bloop daemons started for this run have the daemon directory on their command line
+  pkill -f -- "$cli_home" 2>/dev/null || true
+  rm -rf "$cli_home"
+}
+trap stop_bloop EXIT
+
+status=0
+"$runner" "--jvm_flag=-Dtest.scala-cli.path=$launcher" "$@" || status=$?
+exit "$status"
