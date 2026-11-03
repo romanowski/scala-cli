@@ -13,11 +13,15 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # The Mill jobs, the Mill vs Bazel build comparison and the release are temporarily
+  # disabled (only the Bazel jobs run): set the repository variable ENABLE_MILL_CI to
+  # `true` (Settings > Secrets and variables > Actions > Variables) to run them again.
   changes:
     uses: ./.github/workflows/changes.yml
 
   jvm:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/jvm.yml
     secrets: inherit
     with:
@@ -44,6 +48,7 @@ jobs:
 
   linux:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/linux.yml
     secrets: inherit
     with:
@@ -58,6 +63,7 @@ jobs:
 
   macos:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/macos.yml
     secrets: inherit
     with:
@@ -72,6 +78,7 @@ jobs:
 
   windows:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/windows.yml
     secrets: inherit
     with:
@@ -85,6 +92,7 @@ jobs:
 
   windows-arm64:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/windows-arm64.yml
     with:
       code: ${{ needs.changes.outputs.code }}
@@ -96,6 +104,7 @@ jobs:
 
   static:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/static.yml
     secrets: inherit
     with:
@@ -110,6 +119,7 @@ jobs:
 
   mostly-static:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/mostly-static.yml
     secrets: inherit
     with:
@@ -124,6 +134,7 @@ jobs:
 
   misc:
     needs: [changes]
+    if: vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/misc.yml
     secrets: inherit
     with:
@@ -143,7 +154,7 @@ jobs:
   # Informational only: never fails, and the release job doesn't depend on it.
   build-comparison:
     needs: [changes, jvm, linux, macos, windows, static, mostly-static, misc, bazel]
-    if: always() && needs.changes.outputs.test_skip != 'true'
+    if: always() && vars.ENABLE_MILL_CI == 'true' && needs.changes.outputs.test_skip != 'true'
     runs-on: ubuntu-24.04
     continue-on-error: true
     permissions:
@@ -176,6 +187,6 @@ jobs:
 
   release:
     needs: [changes, jvm, linux, macos, windows, windows-arm64, static, mostly-static, misc]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && vars.ENABLE_MILL_CI == 'true'
     uses: ./.github/workflows/release.yml
     secrets: inherit

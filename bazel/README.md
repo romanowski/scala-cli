@@ -71,6 +71,10 @@ and Mill also runs them sequentially on CI.
 
 ## CI: shadow build
 
+> **Currently**, to speed CI up, only the Bazel jobs run: the Mill jobs, the build
+> comparison and the release are skipped unless the repository variable
+> `ENABLE_MILL_CI` is `true` (Settings > Secrets and variables > Actions > Variables).
+
 Mill stays the build of record: release and every required check run on Mill.
 `.github/workflows/bazel.yml` runs the Bazel equivalents **in parallel, as a shadow**:
 its jobs use `continue-on-error`, and nothing depends on them, so Bazel failures never

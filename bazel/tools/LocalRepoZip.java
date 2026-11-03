@@ -77,7 +77,11 @@ public final class LocalRepoZip {
   private static String readStatus(Path statusFile, String key) throws IOException {
     for (String line : Files.readAllLines(statusFile, StandardCharsets.UTF_8))
       if (line.startsWith(key + " ")) return line.substring(key.length() + 1).trim();
-    throw new IllegalStateException(key + " not found in " + statusFile);
+    throw new IllegalStateException(
+        key
+            + " not found in "
+            + statusFile
+            + " (written by the --workspace_status_command of .bazelrc, bazel/workspace_status.sh)");
   }
 
   private static String ivyXml(Module m, String version) {
