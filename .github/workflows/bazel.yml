@@ -95,6 +95,17 @@ jobs:
     - name: Log skip reason
       if: env.SHOULD_RUN != 'true'
       run: echo "Skipping Bazel unit tests -- changes do not affect compiled code or CI."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
     - uses: actions/checkout@v7
       if: env.SHOULD_RUN == 'true'
       with:
@@ -173,6 +184,17 @@ jobs:
     - name: Log skip reason
       if: env.SHOULD_RUN != 'true'
       run: echo "Skipping Bazel JVM integration tests (${{ matrix.job }})."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
     - uses: actions/checkout@v7
       if: env.SHOULD_RUN == 'true'
       with:
@@ -228,6 +250,17 @@ jobs:
     - name: Log skip reason
       if: env.SHOULD_RUN != 'true'
       run: echo "Skipping Bazel docs tests -- changes do not affect code, docs, or CI."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
     - uses: actions/checkout@v7
       if: env.SHOULD_RUN == 'true'
       with:
@@ -398,6 +431,17 @@ jobs:
     - name: Log skip reason
       if: env.SHOULD_RUN != 'true'
       run: echo "Skipping Bazel native integration tests (${{ matrix.job }})."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
     - uses: actions/checkout@v7
       if: env.SHOULD_RUN == 'true'
       with:
