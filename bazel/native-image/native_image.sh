@@ -123,6 +123,11 @@ if [[ -n "$docker_image" ]]; then
 fi
 
 # --- Host --------------------------------------------------------------------------
+if [[ "$(uname -s)" == "Linux" ]]; then
+  # The image keeps the build's locale encoding (sun.jnu.encoding, file names): build with
+  # a UTF-8 locale, as Mill's Docker-based builds set one up (actions get none).
+  export LANG=C.UTF-8 LC_ALL=C.UTF-8
+fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/scala-cli-native-image.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 copy_static_libs "$work/native-libs"

@@ -47,9 +47,16 @@ cli_home="$(mktemp -d "/tmp/scli-it.XXXXXX")"
 export SCALA_CLI_HOME="$cli_home"
 
 stop_bloop() {
-  # Bloop daemons started for this run have the daemon directory on their command line
+  # Stop this run's Bloop daemon through the CLI (works on every OS), then, as a fallback,
+  # by its command line, which contains its daemon directory (not available on Windows).
+  # Cleanup never changes the test result.
+  if [[ "$launcher" == *.jar || "$(head -c 2 "$launcher" 2>/dev/null)" == "#!" ]]; then
+    java -jar "$launcher" --power bloop exit >/dev/null 2>&1 || true
+  else
+    "$launcher" --power bloop exit >/dev/null 2>&1 || true
+  fi
   pkill -f -- "$cli_home" 2>/dev/null || true
-  rm -rf "$cli_home"
+  rm -rf "$cli_home" 2>/dev/null || true
 }
 trap stop_bloop EXIT
 
