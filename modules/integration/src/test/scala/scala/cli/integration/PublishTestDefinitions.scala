@@ -3,7 +3,6 @@ package scala.cli.integration
 import com.eed3si9n.expecty.Expecty.expect
 
 import java.io.File
-import java.nio.file.Paths
 import java.util.zip.ZipFile
 
 import scala.cli.integration.TestUtil.stableStdoutOf
@@ -91,18 +90,8 @@ abstract class PublishTestDefinitions
     scopeDescription = scopeOpts.headOption.getOrElse("main")
   }
     test(s"simple ($scopeDescription)") {
-      val publicKey = {
-        val uri = Thread.currentThread().getContextClassLoader
-          .getResource("test-keys/key.asc")
-          .toURI
-        os.Path(Paths.get(uri))
-      }
-      val secretKey = {
-        val uri = Thread.currentThread().getContextClassLoader
-          .getResource("test-keys/key.skr")
-          .toURI
-        os.Path(Paths.get(uri))
-      }
+      val publicKey = TestUtil.resourceFile("test-keys/key.asc")
+      val secretKey = TestUtil.resourceFile("test-keys/key.skr")
 
       val signingOptions = Seq(
         "--secret-key",
@@ -197,18 +186,8 @@ abstract class PublishTestDefinitions
     // TODO potentially consider if we want to port this to 3.8
     test("simple sign with external JVM process, java version too low") {
       TestUtil.retryOnCi() {
-        val publicKey = {
-          val uri = Thread.currentThread().getContextClassLoader
-            .getResource("test-keys/key.asc")
-            .toURI
-          os.Path(Paths.get(uri))
-        }
-        val secretKey = {
-          val uri = Thread.currentThread().getContextClassLoader
-            .getResource("test-keys/key.skr")
-            .toURI
-          os.Path(Paths.get(uri))
-        }
+        val publicKey = TestUtil.resourceFile("test-keys/key.asc")
+        val secretKey = TestUtil.resourceFile("test-keys/key.skr")
 
         val signingOptions = Seq(
           "--secret-key",

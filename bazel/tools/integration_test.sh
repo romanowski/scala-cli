@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Runs a Scala CLI integration test suite (a scala_junit_test given as $1) against
+# the launcher given as $2, with the environment `integration.test.forkEnv` sets in
+# build.mill. Paths must be absolute, hence this wrapper rather than `env` / `jvm_flags`.
+set -euo pipefail
+
+runner="$PWD/$1"
+shift
+# The launcher under test: built by Bazel ($2), or, like Mill's
+# SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY, a prebuilt one (e.g. a CI artifact) given
+# with --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=/abs/path (then $2 is "-").
+if [[ "$1" == "-" ]]; then
+  launcher="${SCALA_CLI_IT_FORCED_LAUNCHER:?SCALA_CLI_IT_FORCED_LAUNCHER not set}"
+else
+  launcher="$PWD/$1"
+fi
+shift
+# The CLI reports its own path (BSP connection files, error messages...), and tests compare
+# it with test.scala-cli.path: pass it the way the CLI sees it, like Mill does. On Windows,
+# that's the native form (D:\...); elsewhere, the runfiles symlink resolved.
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) launcher="$(cygpath -w "$launcher")" ;;
+  *) launcher="$(readlink -f "$launcher" 2>/dev/null || echo "$launcher")" ;;
+esac
+
+base="${TEST_TMPDIR}/working-dir"
+mkdir -p "$base"
+export SCALA_CLI_TMP="$base"
+export SCALA_CLI_CONFIG="$base/config/config.json"
+export SCALA_CLI_PRINT_STACK_TRACES=1
+export SCALA_CLI_SHELL_LAUNCHER="$PWD/scala-cli.sh"
+export JAVA_RUNFILES="${TEST_SRCDIR}"
+
+# The tests run the launcher with the `java` of the PATH: use the test JDK (JAVA_HOME),
+# as Mill's test runs do, not whatever comes first in the caller's PATH (a newer JDK
+# prints sun.misc.Unsafe warnings some tests check for).
+if [[ -n "${JAVA_HOME:-}" ]]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
+# Isolation, so that test runs / shards can run in parallel: each one gets its own
+# Scala CLI home (Bloop daemon, config, local repository...), which the CLI under test
+# inherits (SCALA_CLI_HOME, read by scala.build.Directories). The path stays short:
+# the Bloop daemon listens on a Unix domain socket under it (~104 characters max).
+# The coursier cache stays shared (coursier locks it).
+cli_home="$(mktemp -d "/tmp/scli-it.XXXXXX")"
+export SCALA_CLI_HOME="$cli_home"
+
+stop_bloop() {
+  # Stop this run's Bloop daemon through the CLI (works on every OS), then, as a fallback,
+  # by its command line, which contains its daemon directory (not available on Windows).
+  # Cleanup never changes the test result.
+  if [[ "$launcher" == *.jar || "$(head -c 2 "$launcher" 2>/dev/null)" == "#!" ]]; then
+    java -jar "$launcher" --power bloop exit >/dev/null 2>&1 || true
+  else
+    "$launcher" --power bloop exit >/dev/null 2>&1 || true
+  fi
+  pkill -f -- "$cli_home" 2>/dev/null || true
+  rm -rf "$cli_home" 2>/dev/null || true
+}
+trap stop_bloop EXIT
+
+status=0
+# java.io.tmpdir: Bazel points it at TEST_TMPDIR, under the execution root, which is a git
+# working tree (Bazel links the workspace's .git there), changing what the CLI infers from git
+# in temporary directories (e.g. `publish`). Use a directory outside of it, as with Mill.
+mkdir -p "$cli_home/java-tmp"
+"$runner" "--jvm_flag=-Dtest.scala-cli.path=$launcher" "--jvm_flag=-Djava.io.tmpdir=$cli_home/java-tmp" "$@" || status=$?
+exit "$status"

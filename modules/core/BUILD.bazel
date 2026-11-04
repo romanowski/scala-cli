@@ -1,0 +1,37 @@
+load("//bazel:defs.bzl", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+
+scala_cli_constants(
+    name = "constants",
+    out = "Constants.scala",
+    template = "//bazel/constants:core.scala.tpl",
+)
+
+# `core` in build.mill
+scala_cli_library(
+    name = "core",
+    macro = True,
+    srcs = glob(["src/main/scala/**/*.scala"]) + [":constants"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//modules/build-macros",  # compileModuleDeps in Mill
+        "//modules/config",
+        "@maven//:ch_epfl_scala_bloop_rifle_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_lihaoyi_os_lib_3",
+        "@maven//:com_lihaoyi_pprint_3",
+        "@maven//:com_swoval_file_tree_views",
+        "@maven//:io_get_coursier_coursier_jvm_3",
+        "@maven//:io_get_coursier_dependency_3",
+        "@maven//:org_eclipse_jgit_org_eclipse_jgit",
+        "@maven//:org_scala_js_scalajs_env_jsdom_nodejs_2_13",
+        "@maven//:org_scala_js_scalajs_logging_3",
+        "@maven//:org_scala_lang_modules_scala_collection_compat_3",
+        "@maven//:org_scala_native_tools_3",
+    ],
+)
+
+scala_cli_test(
+    name = "test",
+    deps = [":core"],
+)

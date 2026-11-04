@@ -21,11 +21,11 @@ abstract class ScalaCliSuite extends munit.FunSuite {
     resourceTracker.trackFuture(future)
 
   implicit class BeforeEachOpts(munitContext: BeforeEach) {
-    def locationAbsolutePath: os.Path = os.Path(munitContext.test.location.path)
+    def locationAbsolutePath: os.Path = os.Path(munitContext.test.location.path, os.pwd)
   }
 
   implicit class AfterEachOpts(munitContext: AfterEach) {
-    def locationAbsolutePath: os.Path = os.Path(munitContext.test.location.path)
+    def locationAbsolutePath: os.Path = os.Path(munitContext.test.location.path, os.pwd)
   }
   val testStartEndLogger: Fixture[Unit] = new Fixture[Unit]("files") {
     def apply(): Unit = ()

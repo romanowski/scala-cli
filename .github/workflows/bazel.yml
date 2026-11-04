@@ -1,0 +1,520 @@
+name: Bazel (shadow)
+# Shadow CI for the Bazel build, which lives alongside Mill (see bazel/README.md).
+#
+# Every job here mirrors a Mill job: same job id, same step names for the equivalent
+# steps, and test reports uploaded as `bazel-test-results-<job id>` (Mill uploads
+# `test-results-<job id>`). The `build-comparison` job in ci.yml pairs them to compare
+# durations and test counts over time (.github/scripts/compare-build-systems.py).
+#
+# Shadow: jobs use continue-on-error and nothing (in particular the release job)
+# depends on this workflow, so Bazel failures never block CI or releases.
+on:
+  workflow_call:
+    inputs:
+      code:
+        type: string
+        required: true
+      ci:
+        type: string
+        required: true
+      docs:
+        type: string
+        required: true
+      test_all:
+        type: string
+        required: true
+      test_integration:
+        type: string
+        required: true
+      test_docs:
+        type: string
+        required: true
+      test_skip:
+        type: string
+        required: true
+      test_legacy_lts:
+        type: string
+        required: true
+      test_native:
+        type: string
+        required: true
+
+env:
+  BAZEL_FLAGS: --config=ci
+  # Binaries link to the upstream repository (issues, updates, docs), also when built
+  # on a fork, which tests (reference doc, experimental feature warnings) expect.
+  SCALA_CLI_GH_REPOSITORY: VirtusLab/scala-cli
+
+jobs:
+  # Compiles everything the Linux jobs below need, once, and saves it as the shared
+  # "shared-linux" disk cache, which they restore instead of compiling it again.
+  build:
+    timeout-minutes: 120
+    runs-on: ubuntu-24.04
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.docs == 'true' || inputs.test_all == 'true' || inputs.test_integration == 'true' || inputs.test_docs == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping the shared Bazel build -- changes do not affect code, docs, or CI."
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: shared-linux
+        repository-cache: true
+    - name: Build everything
+      if: env.SHOULD_RUN == 'true'
+      run: >
+        .github/scripts/bazel-retry.sh build $BAZEL_FLAGS
+        //...
+        //modules/integration:jvm
+        //modules/integration:jvmBootstrapped
+        //modules/integration:native-prebuilt
+        //modules/integration:native-static-prebuilt
+        //modules/integration:native-mostly-static-prebuilt
+        //modules/docs-tests:test
+        //modules/generate-reference-doc
+
+  # jvm.yml: unit-tests
+  unit-tests:
+    timeout-minutes: 120
+    needs: [build]
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    env:
+      # UTF-8 locale for tests (non-ASCII file names...), as Mill's CI runs have
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel unit tests -- changes do not affect compiled code or CI."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    # Host JDK, as in jvm.yml (scala-cli-setup jvm: zulu:25); CompromisedCaTests checks its trust store.
+    - uses: actions/setup-java@v6
+      if: env.SHOULD_RUN == 'true'
+      with:
+        distribution: zulu
+        java-version: 25
+    # JDK used by the tests (Mill's ScalaCliTests.jvmVersion: temurin:17).
+    - uses: actions/setup-java@v6
+      if: env.SHOULD_RUN == 'true'
+      with:
+        distribution: temurin
+        java-version: 17
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: shared-linux
+        cache-save: false
+        repository-cache: true
+    # Mill: `copyJvmLauncher` + `copyJvmBootstrappedLauncher`
+    - name: Copy launcher
+      if: env.SHOULD_RUN == 'true'
+      run: .github/scripts/bazel-retry.sh build $BAZEL_FLAGS //modules/cli:scala-cli-standalone-launcher //modules/cli:scala-cli-bootstrapped-jar
+    # Mill: `./mill -i '__[_].compile'`
+    - name: Cross compile everything
+      if: env.SHOULD_RUN == 'true'
+      run: .github/scripts/bazel-retry.sh build $BAZEL_FLAGS //...
+    # Mill: `./mill -i unitTests`
+    - name: Unit tests
+      if: env.SHOULD_RUN == 'true'
+      run: >
+        .github/scripts/bazel-retry.sh test $BAZEL_FLAGS
+        --test_env=JAVA_HOME=$JAVA_HOME_17_X64
+        --test_env=SCALA_CLI_TESTS_HOST_JAVA_HOME=$JAVA_HOME_25_X64
+        //:unit_tests
+    - name: Collect test reports
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      run: .github/scripts/collect-bazel-test-reports.sh bazel-test-reports
+    - name: Upload test report
+      uses: actions/upload-artifact@v7
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      with:
+        name: bazel-test-results-unit-tests
+        path: bazel-test-reports/
+        if-no-files-found: ignore
+
+  # jvm.yml: jvm-tests-* and jvm-bootstrapped-tests-default
+  jvm-tests:
+    name: ${{ matrix.job }}
+    timeout-minutes: 180
+    needs: [build]
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Same jobs and SCALA_CLI_IT_GROUP split as jvm.yml
+          - { job: jvm-tests-default, target: jvm, group: 1 }
+          - { job: jvm-tests-scala-2-13, target: jvm, group: 2 }
+          - { job: jvm-tests-scala-2-12, target: jvm, group: 3 }
+          - { job: jvm-tests-lts, target: jvm, group: 4 }
+          - { job: jvm-tests-rc, target: jvm, group: 5 }
+          - { job: jvm-tests-legacy-lts, target: jvm, group: 6, legacy_lts: true }
+          - { job: jvm-bootstrapped-tests-default, target: jvmBootstrapped, group: 1 }
+    env:
+      # UTF-8 locale for tests (non-ASCII file names...), as Mill's CI runs have
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_integration == 'true') && inputs.test_skip != 'true' && (!matrix.legacy_lts || inputs.test_legacy_lts == 'true') }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel JVM integration tests (${{ matrix.job }})."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v6
+      if: env.SHOULD_RUN == 'true'
+      with:
+        distribution: temurin
+        java-version: 17
+    - uses: actions/setup-node@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        node-version: 24
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: shared-linux
+        cache-save: false
+        repository-cache: true
+    # Mill: `./mill -i integration.test.jvm` / `integration.test.jvmBootstrapped`
+    - name: JVM integration tests
+      if: env.SHOULD_RUN == 'true'
+      run: >
+        .github/scripts/bazel-retry.sh test $BAZEL_FLAGS
+        --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI
+        --test_env=SCALA_CLI_IT_GROUP=${{ matrix.group }}
+        //modules/integration:${{ matrix.target }}
+    - name: Collect test reports
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      shell: bash
+      run: .github/scripts/collect-bazel-test-reports.sh bazel-test-reports
+    - name: Upload test report
+      uses: actions/upload-artifact@v7
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      with:
+        name: bazel-test-results-${{ matrix.job }}
+        path: bazel-test-reports/
+        if-no-files-found: ignore
+
+  # misc.yml: docs-tests
+  docs-tests:
+    timeout-minutes: 120
+    needs: [build]
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    env:
+      # UTF-8 locale for tests (non-ASCII file names...), as Mill's CI runs have
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.docs == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_docs == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel docs tests -- changes do not affect code, docs, or CI."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v6
+      if: env.SHOULD_RUN == 'true'
+      with:
+        distribution: temurin
+        java-version: 17
+    # as in misc.yml: some documentation snippets run on Node.js, Deno and Bun
+    - uses: actions/setup-node@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        node-version: 24
+    - uses: denoland/setup-deno@v2
+      if: env.SHOULD_RUN == 'true'
+      with:
+        deno-version: v2.x
+    - uses: oven-sh/setup-bun@v2
+      if: env.SHOULD_RUN == 'true'
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: shared-linux
+        cache-save: false
+        repository-cache: true
+    # Mill: `./mill -i 'docs-tests[]'.test`
+    - name: Test documentation
+      if: env.SHOULD_RUN == 'true'
+      run: >
+        .github/scripts/bazel-retry.sh test $BAZEL_FLAGS
+        --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI
+        //modules/docs-tests:test
+    - name: Collect test reports
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      run: .github/scripts/collect-bazel-test-reports.sh bazel-test-reports
+    - name: Upload test report
+      uses: actions/upload-artifact@v7
+      if: (success() || failure()) && env.SHOULD_RUN == 'true'
+      with:
+        name: bazel-test-results-docs-tests
+        path: bazel-test-reports/
+        if-no-files-found: ignore
+
+  # misc.yml: reference-doc
+  reference-doc:
+    timeout-minutes: 60
+    needs: [build]
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.docs == 'true' || inputs.ci == 'true' || inputs.test_all == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel reference doc check -- changes do not affect code, docs, or CI."
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: shared-linux
+        cache-save: false
+        repository-cache: true
+    # Mill: `./mill -i 'generate-reference-doc[]'.run --check`
+    - name: Check that reference doc is up-to-date
+      if: env.SHOULD_RUN == 'true'
+      run: |
+        .github/scripts/bazel-retry.sh run $BAZEL_FLAGS //modules/generate-reference-doc -- --check || (
+          echo "Reference doc is not up-to-date. Run"
+          echo "  bazel run //modules/generate-reference-doc"
+          echo "to update it, then commit the result."
+          exit 1
+        )
+
+  # linux.yml / macos.yml / windows.yml / static.yml / mostly-static.yml: generate-*-launcher
+  # (Mill builds the Linux one in an ubuntu:24.04 Docker container; Bazel builds it
+  # directly on the ubuntu-24.04 runner.)
+  generate-native-launcher:
+    name: ${{ matrix.job }}
+    timeout-minutes: 120
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { job: generate-linux-launcher, os: ubuntu-24.04, artifact: bazel-linux-launchers }
+          - { job: generate-macos-launcher, os: macOS-15-intel, artifact: bazel-macos-launchers }
+          - { job: generate-macos-arm64-launcher, os: macOS-15, artifact: bazel-macos-arm64-launchers }
+          - { job: generate-windows-launcher, os: windows-2025, artifact: bazel-windows-launchers }
+          # static.yml / mostly-static.yml (built in linux/amd64 Docker containers)
+          - { job: generate-static-launcher, os: ubuntu-24.04, artifact: bazel-static-launchers, target: scala-cli-native-static }
+          - { job: generate-mostly-static-launcher, os: ubuntu-24.04, artifact: bazel-mostly-static-launchers, target: scala-cli-native-mostly-static }
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel native launcher generation (${{ matrix.job }})."
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - name: Import custom registry and verify
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Windows'
+      uses: ./.github/actions/windows-reg-import
+      with:
+        reg-file: .github/ci/windows/custom.reg
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: ${{ matrix.os == 'ubuntu-24.04' && 'shared-linux' || format('{0}-{1}', github.workflow, matrix.job) }}
+        cache-save: ${{ matrix.os != 'ubuntu-24.04' }}
+        repository-cache: true
+    # Mill: .github/scripts/generate-native-image.sh (`cli[].base-image.nativeImage`)
+    - name: Generate native launcher
+      if: env.SHOULD_RUN == 'true'
+      shell: bash
+      run: |
+        startup=()
+        if [[ "$RUNNER_OS" == "Windows" ]]; then startup=(--output_user_root=C:/b); fi
+        target="//modules/cli:${{ matrix.target || 'scala-cli-native' }}"
+        .github/scripts/bazel-retry.sh "${startup[@]}" build $BAZEL_FLAGS "$target"
+        mkdir -p artifacts
+        launcher="$(bazel "${startup[@]}" cquery $BAZEL_FLAGS --output=files "$target" 2>/dev/null)"
+        cp "$launcher" "artifacts/$(basename "$launcher")"
+        chmod +x artifacts/*
+        ls -la artifacts/
+    - uses: actions/upload-artifact@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        name: ${{ matrix.artifact }}
+        path: artifacts/
+        if-no-files-found: error
+        retention-days: 2
+
+  # linux.yml / macos.yml / windows.yml: native-*-tests-default,
+  # static.yml / mostly-static.yml: native-{static,mostly-static}-tests-default
+  native-tests:
+    name: ${{ matrix.job }}
+    needs: [generate-native-launcher]
+    # Run each entry whose launcher was built, even if another platform's launcher job
+    # failed or never got a runner (e.g. macOS arm64 capacity): a missing artifact only
+    # skips that entry.
+    if: ${{ !cancelled() }}
+    timeout-minutes: 180
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { job: native-linux-tests-default, os: ubuntu-24.04, artifact: bazel-linux-launchers }
+          - { job: native-macos-tests-default, os: macOS-15-intel, artifact: bazel-macos-launchers }
+          - { job: native-macos-arm64-tests-default, os: macOS-15, artifact: bazel-macos-arm64-launchers }
+          - { job: native-windows-tests-default, os: windows-2025, artifact: bazel-windows-launchers }
+          - { job: native-static-tests-default, os: ubuntu-24.04, artifact: bazel-static-launchers, target: native-static-prebuilt }
+          - { job: native-mostly-static-tests-default, os: ubuntu-24.04, artifact: bazel-mostly-static-launchers, target: native-mostly-static-prebuilt }
+    env:
+      SHOULD_RUN: ${{ (inputs.code == 'true' || inputs.ci == 'true' || inputs.test_all == 'true' || inputs.test_native == 'true') && inputs.test_skip != 'true' }}
+    steps:
+    - name: Log skip reason
+      if: env.SHOULD_RUN != 'true'
+      run: echo "Skipping Bazel native integration tests (${{ matrix.job }})."
+    # The integration tests (JDKs and Scala versions they fetch, their working directories)
+    # and the restored Bazel cache can fill the runner's disk ("No space left on device"):
+    # remove large preinstalled toolchains this build doesn't use.
+    - name: Free disk space
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
+    - uses: actions/checkout@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        fetch-depth: 0
+    - name: Import custom registry and verify
+      if: env.SHOULD_RUN == 'true' && runner.os == 'Windows'
+      uses: ./.github/actions/windows-reg-import
+      with:
+        reg-file: .github/ci/windows/custom.reg
+    - uses: actions/setup-java@v6
+      if: env.SHOULD_RUN == 'true'
+      with:
+        distribution: temurin
+        java-version: 17
+    - uses: actions/setup-node@v7
+      if: env.SHOULD_RUN == 'true'
+      with:
+        node-version: 24
+    - uses: bazel-contrib/setup-bazel@0.19.1
+      if: env.SHOULD_RUN == 'true'
+      with:
+        bazelisk-cache: true
+        disk-cache: ${{ matrix.os == 'ubuntu-24.04' && 'shared-linux' || format('{0}-{1}', github.workflow, matrix.job) }}
+        cache-save: ${{ matrix.os != 'ubuntu-24.04' }}
+        repository-cache: true
+    - uses: actions/download-artifact@v8
+      id: launcher
+      if: env.SHOULD_RUN == 'true'
+      continue-on-error: true
+      with:
+        name: ${{ matrix.artifact }}
+        path: artifacts/
+    - name: Skip if the launcher wasn't built
+      if: env.SHOULD_RUN == 'true' && steps.launcher.outcome != 'success'
+      shell: bash
+      run: echo "::warning::No ${{ matrix.artifact }} artifact (its launcher job failed or didn't run), skipping ${{ matrix.job }}"
+    # Mill: `./mill -i nativeIntegrationTests` with SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY
+    - name: Native integration tests
+      if: env.SHOULD_RUN == 'true' && steps.launcher.outcome == 'success'
+      shell: bash
+      run: |
+        startup=()
+        extra=()
+        launcher="$PWD/artifacts/scala-cli"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          startup=(--output_user_root=C:/b)
+          launcher="$(cygpath -m "$PWD/artifacts/scala-cli.exe")"
+          # as in windows.yml
+          extra=(--test_env=COURSIER_JNI=force --test_env=SCALA_CLI_SODIUM_JNI_ALLOW=false)
+        fi
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          # UTF-8 locale for the native launcher (non-ASCII file names...)
+          export LANG=C.UTF-8 LC_ALL=C.UTF-8
+        fi
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          # as in macos.yml: only the sanity subset of the integration tests
+          extra+=(--test_env=SCALA_CLI_IT_SANITY=true)
+        fi
+        chmod +x artifacts/*
+        .github/scripts/bazel-retry.sh "${startup[@]}" test $BAZEL_FLAGS \
+          --test_env=JAVA_HOME --test_env=PATH --test_env=HOME --test_env=CI \
+          --test_env=SCALA_CLI_IT_GROUP=1 \
+          --test_env=SCALA_CLI_IT_FORCED_LAUNCHER="$launcher" \
+          "${extra[@]}" \
+          "//modules/integration:${{ matrix.target || 'native-prebuilt' }}"
+    - name: Collect test reports
+      if: (success() || failure()) && env.SHOULD_RUN == 'true' && steps.launcher.outcome == 'success'
+      shell: bash
+      run: .github/scripts/collect-bazel-test-reports.sh bazel-test-reports
+    - name: Upload test report
+      uses: actions/upload-artifact@v7
+      if: (success() || failure()) && env.SHOULD_RUN == 'true' && steps.launcher.outcome == 'success'
+      with:
+        name: bazel-test-results-${{ matrix.job }}
+        path: bazel-test-reports/
+        if-no-files-found: ignore

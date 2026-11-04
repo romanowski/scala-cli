@@ -1,0 +1,39 @@
+# Bazel build for Scala CLI (alongside Mill during the migration, see bazel/README.md).
+
+exports_files([
+    # Constants.mostlyStaticDockerfile of the integration tests
+    ".github/scripts/docker/ScalaCliSlimDockerFile",
+    "scala-cli.sh",
+    "maven_install.json",
+])
+
+# `./mill -i unitTests` (build.mill)
+test_suite(
+    name = "unit_tests",
+    tests = [
+        "//modules/build:test",
+        "//modules/build-macros:test",
+        "//modules/cli:test",
+        "//modules/core:test",
+        "//modules/options:test",
+    ],
+)
+
+# Repository files read by the docs tests (//modules/docs-tests:test).
+filegroup(
+    name = "docs_test_data",
+    srcs = glob([
+        "gifs/**",
+        "website/docs/**",
+        "website/static/img/**",
+    ]),
+    visibility = ["//modules/docs-tests:__pkg__"],
+)
+
+# Docker build context of the musl builder image (Mill: static-image.buildHelperImage),
+# used by //modules/cli:scala-cli-native-static.
+filegroup(
+    name = "musl_image",
+    srcs = glob(["project/musl-image/*"]),
+    visibility = ["//modules/cli:__pkg__"],
+)

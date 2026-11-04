@@ -1,0 +1,431 @@
+"""Bazel build for Scala CLI.
+
+This runs alongside Mill during the migration (see bazel/README.md).
+Versions below mirror project/deps/package.mill; keep them in sync
+(bazel/check-mill-parity.sh verifies the generated constants).
+"""
+
+module(name = "scala_cli")
+
+bazel_dep(name = "rules_java", version = "9.9.0")
+bazel_dep(name = "rules_jvm_external", version = "7.2")
+bazel_dep(name = "rules_scala", version = "7.4.1")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+# Already in the graph via rules_scala; direct so that .bazelrc can set its prebuilt protoc flag.
+bazel_dep(name = "protobuf", version = "33.4")
+
+# --- Scala toolchain ---------------------------------------------------------
+# Scala.scala3Next / Scala.defaultInternal in project/deps/package.mill.
+# Override for a whole build with --repo_env=SCALA_VERSION=<one of scala_versions>,
+# the Bazel counterpart of `./mill --define scala.version.internal=...`.
+SCALA_VERSION = "3.10.0"  # Scala.scala3Next
+
+SCALA_3_LTS = "3.9.0"  # Scala.scala3Lts
+
+SCALA_3_LEGACY_LTS = "3.3.9"  # Scala.scala3LegacyLts, Scala.runnerScala3
+
+scala_config = use_extension("@rules_scala//scala/extensions:config.bzl", "scala_config")
+scala_config.settings(
+    scala_version = SCALA_VERSION,
+    scala_versions = [
+        SCALA_3_LEGACY_LTS,
+        SCALA_3_LTS,
+    ],
+)
+use_repo(scala_config, "rules_scala_config")
+
+scala_deps = use_extension("@rules_scala//scala/extensions:deps.bzl", "scala_deps")
+scala_deps.scala()
+# JUnit comes from our own testing toolchain (//bazel:junit_toolchain), registered with //bazel:all.
+
+# Our own toolchain: transitive compile classpath (like Mill) instead of
+# rules_scala's default direct-only classpath. Defined in //bazel:BUILD.bazel.
+register_toolchains("//bazel:all")
+
+# --- Maven dependencies (Deps / TestDeps in project/deps/package.mill) --------
+# Versions also used for native libraries downloaded below.
+COURSIER_VERSION = "2.1.26"  # Versions.coursier
+
+SCALA_NATIVE_VERSION = "0.5.12"  # Versions.scalaNative
+
+MUNIT_VERSION = "1.3.6"  # Versions.munit
+
+JSONITER_VERSION = "2.42.2"  # Versions.jsoniterScala
+
+SCALA3_GRAAL_VERSION = "1.9.1"  # Cli.scala3GraalLegacyVersion
+
+DOCKER_JAVA_VERSION = "3.7.1"  # Versions.dockerJava
+
+LIBSODIUMJNI_VERSION = "0.0.4"
+
+JNI_UTILS_VERSION = "0.4.0"
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+
+maven.install(
+    name = "maven",
+    artifacts = [
+        # Java libraries
+        "ch.epfl.scala:bsp4j:2.1.1",
+        "ch.epfl.scala:scalafix-interfaces:0.14.9",
+        "com.google.guava:guava:33.7.2-jre",
+        "com.google.jimfs:jimfs:1.3.2",
+        "com.swoval:file-tree-views:2.1.12",
+        "io.get-coursier.jniutils:windows-jni-utils:" + JNI_UTILS_VERSION,
+        "io.github.alexarchambault.python:interface:0.1.0",
+        "org.bouncycastle:bcpkix-jdk18on:1.86",
+        "org.eclipse.jgit:org.eclipse.jgit:7.8.0.202609011348-r",
+        "org.graalvm.nativeimage:svm:25.0.5.0.3",
+        "org.jsoup:jsoup:1.23.2",
+        "org.ow2.asm:asm:9.11.1",
+        "org.scala-sbt:test-interface:1.0",
+        "org.slf4j:slf4j-nop:2.0.20",
+        "org.virtuslab.scala-cli:libsodiumjni:" + LIBSODIUMJNI_VERSION,
+        "org.virtuslab.scala-cli.zip-input-stream:zip-input-stream:0.1.3",
+        "com.github.sbt.junit:jupiter-interface:0.19.0",
+        "com.github.docker-java:docker-java-transport-zerodep:" + DOCKER_JAVA_VERSION,
+        # Scala 3 libraries (`::` in Mill)
+        "ai.kien:python-native-libs_3:0.2.5",
+        "ch.epfl.scala:bloop-rifle_3:2.1.3",
+        "com.eed3si9n.expecty:expecty_3:0.17.1",
+        "com.github.alexarchambault:case-app_3:2.1.1",
+        "com.github.plokhotnyuk.jsoniter-scala:jsoniter-scala-core_3:" + JSONITER_VERSION,
+        "com.github.plokhotnyuk.jsoniter-scala:jsoniter-scala-macros_3:" + JSONITER_VERSION,
+        "com.lihaoyi:fansi_3:0.5.1",
+        "com.lihaoyi:os-lib_3:0.11.10",
+        "com.lihaoyi:pprint_3:0.9.6",
+        "com.lihaoyi:ujson_3:4.4.3",
+        "com.softwaremill.sttp.client3:core_3:3.11.0",
+        "io.get-coursier:coursier_3:" + COURSIER_VERSION,
+        "io.get-coursier:coursier-launcher_3:" + COURSIER_VERSION,
+        "io.get-coursier:dependency_3:0.3.3",
+        "org.scala-js:scalajs-env-nodejs_3:1.6.0",
+        "org.scala-js:scalajs-logging_3:1.2.0",
+        "org.scala-lang:scala3-directives-parser_3:" + SCALA_VERSION,
+        "org.scala-lang.modules:scala-collection-compat_3:2.14.0",
+        "org.scala-native:test-runner_3:" + SCALA_NATIVE_VERSION,
+        "org.scala-native:tools_3:" + SCALA_NATIVE_VERSION,
+        "org.scalameta:munit_3:" + MUNIT_VERSION,
+        "org.scalameta:munit-diff_3:" + MUNIT_VERSION,
+        "org.virtuslab:sloth-core_3:0.1.0-M2",
+        "org.virtuslab.scala-cli:scala3-graal_3:" + SCALA3_GRAAL_VERSION,
+        "org.virtuslab.scala-cli:scala3-graal-processor_3:" + SCALA3_GRAAL_VERSION,
+        # Scala 2.13 libraries used from Scala 3 (explicit suffix in Mill too)
+        "com.github.alexarchambault:argonaut-shapeless_6.3_2.13:1.3.1",
+    ],
+    excluded_artifacts = [
+        # Provided by the rules_scala toolchain (Scala 3.10 standard library).
+        "org.scala-lang:scala-library",
+        "org.scala-lang:scala3-library_3",
+        # Our own `config` module is used instead (Mill excludes it everywhere it can leak in).
+        "org.virtuslab.scala-cli:config_3",
+        "org.virtuslab.scala-cli:config_2.13",
+    ],
+    fail_if_repin_required = True,
+    known_contributing_modules = ["protobuf"],
+    fetch_sources = True,
+    lock_file = "//:maven_install.json",
+    repositories = [
+        "https://repo1.maven.org/maven2",
+        # deps.customRepositories
+        "https://oss.sonatype.org/content/repositories/snapshots",
+        "https://s01.oss.sonatype.org/content/repositories/snapshots",
+        "https://central.sonatype.com/repository/maven-snapshots",
+    ],
+)
+
+# Bazel resolves one graph for the whole repository, whereas Mill resolves each module
+# separately: without this, docker-java-core (integration tests only) would bump the
+# commons-lang3 shipped in the CLI to 3.19.0. Keep the version `cli[].runClasspath` uses.
+maven.artifact(
+    artifact = "commons-lang3",
+    force_version = True,
+    group = "org.apache.commons",
+    version = "3.18.0",
+)
+
+# Artifacts with per-dependency exclusions (`.exclude(...)` in Mill).
+maven.artifact(
+    artifact = "bloop-config_2.13",
+    exclusions = ["com.github.plokhotnyuk.jsoniter-scala:jsoniter-scala-core_2.13"],
+    group = "ch.epfl.scala",
+    version = "2.3.3",
+)
+
+maven.artifact(
+    artifact = "coursier-jvm_3",
+    exclusions = ["com.google.collections:google-collections"],
+    group = "io.get-coursier",
+    version = COURSIER_VERSION,
+)
+
+maven.artifact(
+    artifact = "coursier-archive-cache_3",
+    exclusions = ["com.github.plokhotnyuk.jsoniter-scala:*"],
+    group = "io.get-coursier",
+    version = COURSIER_VERSION,
+)
+
+maven.artifact(
+    artifact = "docker-java-core",
+    exclusions = ["org.bouncycastle:bcpkix-jdk18on"],
+    group = "com.github.docker-java",
+    version = DOCKER_JAVA_VERSION,
+)
+
+maven.artifact(
+    artifact = "java-class-name_3",
+    exclusions = [
+        "org.jline:jline-reader",
+        "org.jline:jline-terminal",
+        "org.jline:jline-terminal-jna",
+    ],
+    group = "org.virtuslab.scala-cli.java-class-name",
+    version = "0.2.0",
+)
+
+maven.artifact(
+    artifact = "metaconfig-typesafe-config_3",
+    exclusions = ["org.scala-lang:scala-compiler"],
+    group = "org.scalameta",
+    version = "0.18.8",
+)
+
+maven.artifact(
+    artifact = "scala-packager_3",
+    exclusions = ["com.lihaoyi:os-lib_2.13"],
+    group = "org.virtuslab",
+    version = "0.3.2",
+)
+
+maven.artifact(
+    artifact = "scala-publish_3",
+    group = "org.scala-lang",
+    version = "1.0.0",
+)
+
+maven.artifact(
+    artifact = "scalajs-env-jsdom-nodejs_2.13",
+    exclusions = [
+        "org.scala-js:scalajs-env-nodejs_2.13",
+        "org.scala-js:scalajs-js-envs_2.13",
+    ],
+    group = "org.scala-js",
+    version = "1.1.1",
+)
+
+maven.artifact(
+    artifact = "scalajs-sbt-test-adapter_2.13",
+    exclusions = ["org.scala-js:scalajs-js-envs_2.13"],
+    group = "org.scala-js",
+    version = "1.22.0",  # Scala.scalaJs
+)
+
+maven.artifact(
+    artifact = "semanticdb-shared_2.13",
+    exclusions = [
+        "org.jline:jline",
+        "com.lihaoyi:sourcecode_2.13",
+        "org.scala-lang.modules:scala-collection-compat_2.13",
+    ],
+    group = "org.scalameta",
+    version = "4.17.4",
+)
+
+SIGNING_VERSION = "0.5.0"  # Versions.signingCli
+
+SIGNING_EXCLUSIONS = [
+    "com.github.alexarchambault:case-app_3",
+    "com.github.plokhotnyuk.jsoniter-scala:jsoniter-scala-core_3",
+    "com.github.plokhotnyuk.jsoniter-scala:jsoniter-scala-macros_3",
+    "com.lihaoyi:os-lib_3",
+    "com.lihaoyi:os-lib_2.13",
+]
+
+maven.artifact(
+    artifact = "shared_3",
+    exclusions = SIGNING_EXCLUSIONS,
+    group = "org.virtuslab.scala-cli-signing",
+    version = SIGNING_VERSION,
+)
+
+maven.artifact(
+    artifact = "cli_3",
+    exclusions = SIGNING_EXCLUSIONS,
+    group = "org.virtuslab.scala-cli-signing",
+    version = SIGNING_VERSION,
+)
+
+# Compile-only dependencies (`compileMvnDeps` in Mill).
+[
+    maven.amend_artifact(
+        coordinates = c,
+        neverlink = "true",
+    )
+    for c in [
+        "com.github.plokhotnyuk.jsoniter-scala:jsoniter-scala-macros_3",
+        "com.github.sbt.junit:jupiter-interface",
+        "org.graalvm.nativeimage:svm",
+    ]
+]
+
+use_repo(maven, "maven")
+
+# --- Downloaded tools --------------------------------------------------------
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+# Files fetched at build time by `cli[].defaultFilesResources` in build.mill
+# (Mill tracks `main`; pinned here for hermeticity).
+DEFAULT_WORKFLOW_COMMIT = "1bc8a76272c71ee1211a79cb8f73230c087a04c5"
+
+http_file(
+    name = "default_workflow_ci_yml",
+    downloaded_file_path = "default.yml",
+    sha256 = "ef336f1c68ebe8a8917d557260c463554bf4a4a6dd8d41e78165eb0aae6cf94a",
+    urls = ["https://raw.githubusercontent.com/scala-cli/default-workflow/" + DEFAULT_WORKFLOW_COMMIT + "/.github/workflows/ci.yml"],
+)
+
+http_file(
+    name = "default_workflow_gitignore",
+    downloaded_file_path = "default.gitignore",
+    sha256 = "72da7b218c4369db31e6073a2ac0517623ba803a324950274401e3dcca8f8317",
+    urls = ["https://raw.githubusercontent.com/scala-cli/default-workflow/" + DEFAULT_WORKFLOW_COMMIT + "/.gitignore"],
+)
+
+# Coursier CLI used by unit and integration tests (`settings.cs` in
+# project/settings/package.mill, version Deps.Versions.coursierCli).
+CS_VERSION = COURSIER_VERSION  # Versions.coursierCli
+
+[
+    http_file(
+        name = "cs_" + platform.replace("-", "_"),
+        sha256 = sha256,
+        urls = ["https://github.com/coursier/coursier/releases/download/v%s/cs-%s.gz" % (CS_VERSION, platform)],
+    )
+    for platform, sha256 in {
+        "aarch64-apple-darwin": "8e4d36aa2565276f262af073f0999399e4c2f920f2fe436bb0ae67665eb505e9",
+        "aarch64-pc-linux": "6c358ac223332c8981eb86417d3faf9338a5ef6c95d1879a58162b24c510025c",
+        "x86_64-apple-darwin": "c8045f36fadec075c8647b979d1028435935b0ecd43efa1387cd286c3926a421",
+        "x86_64-pc-linux": "348e37bc2a8c706640e6b032c4551a0e055a7f1537485b4a91540e9d3598ec6d",
+    }.items()
+]
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "cs_x86_64_pc_win32",
+    build_file_content = 'exports_files(glob(["*.exe"]))',
+    sha256 = "d23f4ba6afa7f092135b485303b0a020358fbb314abf9c6dc2576df3e2abd941",
+    urls = ["https://github.com/coursier/coursier/releases/download/v%s/cs-x86_64-pc-win32.zip" % CS_VERSION],
+)
+
+# GraalVM CE used to build native images (deps.graalVmJvmId in project/deps/package.mill:
+# graalvm-community:25.0.2, or 25.0.1 on macOS x64, which has no newer build).
+GRAALVM_VERSION = "25.0.2"
+
+GRAALVM_MACOS_X64_VERSION = "25.0.1"
+
+GRAALVM_BUILD_FILE = """
+exports_files([
+    "bin/java",
+    "bin/java.exe",
+    "bin/native-image",
+    "bin/native-image.cmd",
+    "lib/security/cacerts",
+])
+
+filegroup(
+    name = "files",
+    srcs = glob(["**"], exclude = ["**/* *"]),
+    visibility = ["//visibility:public"],
+)
+"""
+
+[
+    http_archive(
+        name = "graalvm_" + platform.replace("-", "_"),
+        build_file_content = GRAALVM_BUILD_FILE,
+        sha256 = sha256,
+        strip_prefix = "graalvm-community-openjdk-%s+%s%s" % (version, build, "/Contents/Home" if platform.startswith("macos") else ""),
+        urls = ["https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-%s/graalvm-community-jdk-%s_%s_bin.%s" % (version, version, platform, "zip" if platform.startswith("windows") else "tar.gz")],
+    )
+    for platform, (version, build, sha256) in {
+        "linux-aarch64": (GRAALVM_VERSION, "10.1", "b4580d9f223d0a4b3a1757e58b18ff4c1db950e67e105fc5cb741457d2384a71"),
+        "linux-x64": (GRAALVM_VERSION, "10.1", "e0be791c8fda4d03b6b0a0cb824fef3149736170057b3a515252b44419606af0"),
+        "macos-aarch64": (GRAALVM_VERSION, "10.1", "50201fb8e8e653e7a253d955877a6b6ad634b42e60c84f45df7e1bb51361635f"),
+        "macos-x64": (GRAALVM_MACOS_X64_VERSION, "8.1", "a3d895b4cd1c783badbd277ec70409806bd4102fca0d2a60dbaeb0bab41aec30"),
+        "windows-x64": (GRAALVM_VERSION, "10.1", "72edc27ce2dd3c156332144a339c97995745cae291205ed2f9b5cc26aa9cb422"),
+    }.items()
+]
+
+# Static libraries linked into the Windows native image (CliNativeImage.staticLibDir:
+# sodium.lib, sodiumjni.lib, csjniutils.lib). Versions: deps.libsodiumVersion,
+# Deps.libsodiumjni, Deps.jniUtils.
+LIBSODIUM_VERSION = "1.0.21"  # deps.libsodiumVersion
+
+http_archive(
+    name = "libsodium_msvc",
+    build_file_content = 'exports_files(["libsodium/x64/Release/v143/static/libsodium.lib"])',
+    sha256 = "b19069c44c3875a2d9b46123bee3200cdc26eb9514c296b13cf91e96f1175269",
+    urls = ["https://download.libsodium.org/libsodium/releases/libsodium-%s-stable-msvc.zip" % LIBSODIUM_VERSION],
+)
+
+http_file(
+    name = "libsodiumjni_win32_lib",
+    downloaded_file_path = "sodiumjni.lib",
+    sha256 = "db8a4cde52ea123ad35ba154b4c7e1ee30d15739680f4820e9825078de62a89d",
+    urls = ["https://repo1.maven.org/maven2/org/virtuslab/scala-cli/libsodiumjni/%s/libsodiumjni-%s-x86_64-pc-win32.lib" % (LIBSODIUMJNI_VERSION, LIBSODIUMJNI_VERSION)],
+)
+
+http_file(
+    name = "csjniutils_win32_lib",
+    downloaded_file_path = "csjniutils.lib",
+    sha256 = "c5126a62daeb531c79aa9ab98c61dbb0d8da4d5d360073b109729caf5ccb5d7e",
+    urls = ["https://repo1.maven.org/maven2/io/get-coursier/jniutils/windows-jni-utils/%s/windows-jni-utils-%s-x86_64-pc-win32.lib" % (JNI_UTILS_VERSION, JNI_UTILS_VERSION)],
+)
+
+# Static libraries linked into the static (musl) Linux image (CliNativeImage.staticLibDir
+# for `static-image`): libsodium from Alpine (deps.alpineVersion / alpineLibsodiumVersion)
+# and libsodiumjni.
+ALPINE_VERSION = "3.23"  # deps.alpineVersion
+
+ALPINE_LIBSODIUM_VERSION = "1.0.20"  # deps.alpineLibsodiumVersion
+
+http_archive(
+    name = "alpine_libsodium_static",
+    build_file_content = 'exports_files(["usr/lib/libsodium.a"])',
+    sha256 = "7643127e1271c7b9427bfdbc8e3917cbe399dbf39e3695b09448c781861d0613",
+    type = "tar.gz",
+    urls = ["https://dl-cdn.alpinelinux.org/alpine/v%s/main/x86_64/libsodium-static-%s-r1.apk" % (ALPINE_VERSION, ALPINE_LIBSODIUM_VERSION)],
+)
+
+http_file(
+    name = "libsodiumjni_linux_x64_a",
+    downloaded_file_path = "libsodiumjni.a",
+    sha256 = "e82d284e7b3118e5130d4d87324cd55288664820f37a5395074b643b1fd507b7",
+    urls = ["https://repo1.maven.org/maven2/org/virtuslab/scala-cli/libsodiumjni/%s/libsodiumjni-%s-x86_64-pc-linux.a" % (LIBSODIUMJNI_VERSION, LIBSODIUMJNI_VERSION)],
+)
+
+# --- Build information for the generated Constants.scala files ----------------
+# Publishes the values above, and the versions of the resolved Maven dependencies
+# (maven_install.json), as @scala_cli_build_info//:info.bzl (see bazel/constants/values.bzl).
+build_info = use_extension("//bazel:extensions.bzl", "build_info")
+build_info.values(
+    files = {"mill": "//:.mill-version"},  # BuildInfo.millVersion
+    maven_lock = "//:maven_install.json",
+    values = {
+        "alpine": ALPINE_VERSION,
+        "alpine_libsodium": ALPINE_LIBSODIUM_VERSION,
+        "coursier_cli": CS_VERSION,
+        "graalvm": GRAALVM_VERSION,
+        "graalvm_macos_x64": GRAALVM_MACOS_X64_VERSION,
+        "libsodium": LIBSODIUM_VERSION,
+        "scala3_legacy_lts": SCALA_3_LEGACY_LTS,
+        "scala3_lts": SCALA_3_LTS,
+        "scala3_next": SCALA_VERSION,
+    },
+)
+use_repo(build_info, "scala_cli_build_info")

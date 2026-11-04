@@ -1,0 +1,20 @@
+load("//bazel:defs.bzl", "scala_cli_library", "scala_cli_test")
+
+# `options` in build.mill
+scala_cli_library(
+    name = "options",
+    macro = True,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//modules/build-macros",  # compileModuleDeps in Mill
+        "//modules/core",
+        "@maven//:ch_epfl_scala_bloop_config_2_13",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:org_virtuslab_scala_cli_signing_shared_3",
+    ],
+)
+
+scala_cli_test(
+    name = "test",
+    deps = [":options"],
+)

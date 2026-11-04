@@ -1,0 +1,288 @@
+load("@rules_java//java:java_library.bzl", "java_library")
+load("//bazel:defs.bzl", "scala_cli_binary", "scala_cli_constants", "scala_cli_library", "scala_cli_test")
+load("//bazel/constants:values.bzl", "DEFAULT_FILES_RESOURCE_PATH", "LAUNCHER_TYPE_RESOURCE_PATH", "LOCAL_REPO_RESOURCE_PATH", "UBUNTU_IMAGE")
+load("//bazel/native-image:defs.bzl", "scala_cli_native_image")
+
+scala_cli_constants(
+    name = "constants",
+    out = "Constants.scala",
+    template = "//bazel/constants:cli.scala.tpl",
+)
+
+scala_cli_constants(
+    name = "options_constants",
+    # Constants.scala, like Mill (the name ends up in the classes' SourceFile attribute)
+    out = "options_constants/Constants.scala",
+    template = "//bazel/constants:cli-options.scala.tpl",
+)
+
+# `cli[].defaultFilesResources` in build.mill
+genrule(
+    name = "default_files",
+    srcs = [
+        "@default_workflow_ci_yml//file",
+        "@default_workflow_gitignore//file",
+    ],
+    outs = [
+        "default_files/%s/workflows/default.yml" % DEFAULT_FILES_RESOURCE_PATH,
+        "default_files/%s/gitignore" % DEFAULT_FILES_RESOURCE_PATH,
+    ],
+    cmd = " && ".join([
+        "sed 's| ./scala-cli| scala-cli|g' $(location @default_workflow_ci_yml//file) > $(location default_files/%s/workflows/default.yml)" % DEFAULT_FILES_RESOURCE_PATH,
+        "cp $(location @default_workflow_gitignore//file) $(location default_files/%s/gitignore)" % DEFAULT_FILES_RESOURCE_PATH,
+    ]),
+)
+
+java_library(
+    name = "default_files_resources",
+    resource_strip_prefix = package_name() + "/default_files",
+    resources = [":default_files"],
+)
+
+# `cli` in build.mill
+scala_cli_library(
+    name = "cli",
+    srcs = glob([
+        "src/main/scala/**/*.scala",
+        "src/main/java/**/*.java",
+    ]) + [
+        ":constants",
+        ":options_constants",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        # First on the class path: scala-compiler 2.13 (via semanticdb-shared) bundles an
+        # older copy of scala-asm's classes, and in a fat JAR / class path the first copy
+        # wins. Mill's class path has scala-asm first, which scala3-compiler 3.9 (via
+        # java-class-name) expects.
+        "@maven//:org_scala_lang_modules_scala_asm",
+        ":default_files_resources",
+        "//modules/build",
+        "//modules/config",
+        "//modules/specification-level",
+        "@maven//:ai_kien_python_native_libs_3",
+        "@maven//:ch_epfl_scala_scalafix_interfaces",
+        "@maven//:com_github_alexarchambault_case_app_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_core_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:com_google_jimfs_jimfs",
+        "@maven//:com_softwaremill_sttp_client3_core_3",
+        "@maven//:io_get_coursier_coursier_launcher_3",
+        "@maven//:io_get_coursier_jniutils_windows_jni_utils",
+        "@maven//:org_graalvm_nativeimage_svm",
+        "@maven//:org_scala_lang_scala_publish_3",
+        "@maven//:org_scalameta_metaconfig_typesafe_config_3",
+        "@maven//:org_slf4j_slf4j_nop",
+        "@maven//:org_virtuslab_scala_cli_libsodiumjni",
+        "@maven//:org_virtuslab_scala_cli_scala3_graal_3",
+        "@maven//:org_virtuslab_scala_cli_scala3_graal_processor_3",
+        "@maven//:org_virtuslab_scala_cli_signing_cli_3",
+        "@maven//:org_virtuslab_scala_packager_3",
+    ],
+)
+
+# `./mill -i scala …` / `./mill -i 'cli[]'.run …` (DEV.md)
+scala_cli_binary(
+    name = "scala-cli",
+    main_class = "scala.cli.ScalaCli",
+    runtime_deps = ["//bazel/local-repo"],
+    deps = [":cli"],
+)
+
+scala_cli_test(
+    name = "test",
+    # Required by the reflection usage in SetupScalaCLITests.scala
+    jvm_flags = ["--add-opens=java.base/java.util=ALL-UNNAMED"],
+    # Uses the global Bloop daemon: run alone, like Mill on CI.
+    tags = [
+        "exclusive",
+        "requires-network",
+    ],
+    timeout = "eternal",
+    runtime_deps = ["//bazel/local-repo"],
+    deps = [
+        ":cli",
+        "//modules/build:test-lib",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+    ],
+)
+
+# JVM launchers: self-contained JARs run with `java -jar`, `launchers/<kind>/scala-cli.jar`
+# (the `<name>_deploy.jar` without .tasty / .semanticdb files, like the `cliBootstrapped`
+# assembly rules in build.mill). `scala-cli.kind` is read from java-properties/scala-cli-properties.
+[
+    (
+        genrule(
+            name = "properties_" + kind,
+            outs = ["properties_%s/java-properties/scala-cli-properties" % kind],
+            cmd = "printf 'scala-cli.kind=%s' > $@" % kind,
+        ),
+        java_library(
+            name = "properties_%s_resources" % kind,
+            resource_strip_prefix = package_name() + "/properties_" + kind,
+            resources = [":properties_" + kind],
+        ),
+        scala_cli_binary(
+            name = name,
+            main_class = "scala.cli.ScalaCli",
+            visibility = ["//visibility:public"],
+            runtime_deps = [
+                ":properties_%s_resources" % kind,
+                "//bazel/local-repo",
+            ],
+            deps = [":cli"],
+        ),
+        genrule(
+            name = name + "-jar",
+            srcs = [":%s_deploy.jar" % name],
+            outs = ["launchers/%s/scala-cli.jar" % name.removeprefix("scala-cli-")],
+            cmd = "$(execpath //bazel/tools:filter_jar) $< $@ '.*\\.tasty' '.*\\.semanticdb'",
+            tools = ["//bazel/tools:filter_jar"],
+            visibility = ["//visibility:public"],
+        ),
+    )
+    for name, kind in [
+        # `cli[].standaloneLauncher` / `./mill -i copyJvmLauncher`: see also
+        # :scala-cli-standalone-launcher below
+        ("scala-cli-standalone", "jvm.standaloneLauncher"),
+        # `cliBootstrapped.jar` / `./mill -i copyJvmBootstrappedLauncher`
+        ("scala-cli-bootstrapped", "jvm.bootstrapped"),
+    ]
+]
+
+# Native images (Mill: CliNativeImage in project/settings/package.mill).
+
+# CliNativeImage.nativeImageOptions (-H:CLibraryPath and the trust store are added by
+# bazel/native-image/native_image.sh).
+NATIVE_IMAGE_OPTIONS = [
+    "--no-fallback",
+    "-march=compatibility",
+    "-H:IncludeResources=" + LOCAL_REPO_RESOURCE_PATH,
+    "-H:IncludeResources=" + LAUNCHER_TYPE_RESOURCE_PATH,
+    "-H:IncludeResources=%s/.*" % DEFAULT_FILES_RESOURCE_PATH,
+    "-H:-ParseRuntimeOptions",
+]
+
+# Mill: CliNativeImage.launcherKind, written to scala/cli/internal/launcher-type.txt.
+[
+    (
+        genrule(
+            name = "launcher_type_" + kind,
+            outs = ["launcher_type_%s/%s" % (kind, LAUNCHER_TYPE_RESOURCE_PATH)],
+            cmd = "printf %s > $@" % kind,
+        ),
+        java_library(
+            name = "launcher_type_%s_resources" % kind,
+            resource_strip_prefix = package_name() + "/launcher_type_" + kind,
+            resources = [":launcher_type_" + kind],
+        ),
+    )
+    for kind in ["default", "static", "mostly-static"]
+]
+
+# `./mill -i show 'cli[]'.nativeImage` (`cli[].base-image`): built on the host.
+scala_cli_native_image(
+    name = "scala-cli-native",
+    # Mill: launcher type resource, then runClasspath, then the local repository JAR.
+    deps = [
+        ":launcher_type_default_resources",
+        ":cli",
+        "//bazel/local-repo",
+    ],
+    graalvm = "//bazel/native-image:graalvm",
+    native_image = "//bazel/native-image:native-image",
+    options = NATIVE_IMAGE_OPTIONS + select({
+        # https://stackoverflow.com/a/61325264
+        "//bazel/tools:linux_arm64": [
+            "-Djdk.lang.Process.launchMechanism=vfork",
+            "-H:PageSize=65536",
+        ],
+        "//conditions:default": [],
+    }),
+    output_name = select({
+        "//bazel/native-image:windows": "native/scala-cli.exe",
+        "//conditions:default": "native/scala-cli",
+    }),
+    # CliNativeImage.staticLibDir (Windows): libsodium, libsodiumjni, coursier jni-utils
+    static_libs = select({
+        "//bazel/native-image:windows": {
+            "@libsodium_msvc//:libsodium/x64/Release/v143/static/libsodium.lib": "sodium.lib",
+            "@libsodiumjni_win32_lib//file": "sodiumjni.lib",
+            "@csjniutils_win32_lib//file": "csjniutils.lib",
+        },
+        "//conditions:default": {},
+    }),
+)
+
+# Commands run in the container before native-image (Mill: setupLocaleAndOptions).
+DOCKER_LOCALE_SETUP = """
+set -v
+apt-get update
+apt-get install -q -y locales
+locale-gen en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US:en
+export LC_ALL=en_US.UTF-8
+"""
+
+# `./mill -i show 'cli[]'.nativeImageStatic` (`cli[].static-image`): static musl binary,
+# built in Docker (linux/amd64) with the scala-cli-base-musl image (project/musl-image).
+scala_cli_native_image(
+    name = "scala-cli-native-static",
+    deps = [
+        ":launcher_type_static_resources",
+        ":cli",
+        "//bazel/local-repo",
+    ],
+    docker_args = [
+        "--static",
+        "--libc=musl",
+    ],
+    docker_context = ["//:musl_image"],
+    docker_image = "scala-cli-base-musl:latest",
+    # NativeImage.linuxStaticParams
+    docker_prepare = """(cd /usr/local/musl/bin && ln -s *-musl-gcc musl-gcc) && export PATH="/usr/local/musl/bin:$PATH"
+""" + DOCKER_LOCALE_SETUP,
+    graalvm = "@graalvm_linux_x64//:files",
+    native_image = "@graalvm_linux_x64//:bin/native-image",
+    options = NATIVE_IMAGE_OPTIONS + ["-J-Dscala-cli.static-launcher=true"],
+    output_name = "native-static/scala-cli",
+    static_libs = {
+        "@alpine_libsodium_static//:usr/lib/libsodium.a": "libsodium.a",
+        "@libsodiumjni_linux_x64_a//file": "libsodiumjni.a",
+    },
+)
+
+# `./mill -i show 'cli[]'.nativeImageMostlyStatic` (`cli[].mostly-static-image`): only
+# libc linked dynamically, built in Docker (linux/amd64, UBUNTU_IMAGE).
+scala_cli_native_image(
+    name = "scala-cli-native-mostly-static",
+    deps = [
+        ":launcher_type_mostly-static_resources",
+        ":cli",
+        "//bazel/local-repo",
+    ],
+    docker_args = ["-H:+StaticExecutableWithDynamicLibC"],
+    docker_image = UBUNTU_IMAGE,
+    # NativeImage.linuxMostlyStaticParams
+    docker_prepare = "apt-get update -q -y && apt-get install -q -y build-essential libz-dev\n" + DOCKER_LOCALE_SETUP,
+    graalvm = "@graalvm_linux_x64//:files",
+    native_image = "@graalvm_linux_x64//:bin/native-image",
+    options = NATIVE_IMAGE_OPTIONS,
+    output_name = "native-mostly-static/scala-cli",
+)
+
+# `cli[].standaloneLauncher` itself: the standalone JAR with Mill's (coursier's) shell
+# preamble, so that it's directly executable. The CLI detects the preamble and then refers
+# to itself by this path alone (e.g. in BSP connection files) rather than `java -jar ...`.
+genrule(
+    name = "scala-cli-standalone-launcher",
+    srcs = [
+        "//bazel/tools:standalone-launcher-preamble.sh",
+        ":scala-cli-standalone-jar",
+    ],
+    outs = ["launchers/standalone/scala-cli"],
+    cmd = "cat $(location //bazel/tools:standalone-launcher-preamble.sh) $(location :scala-cli-standalone-jar) > $@ && chmod +x $@",
+    executable = True,
+    visibility = ["//visibility:public"],
+)

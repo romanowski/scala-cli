@@ -1,0 +1,67 @@
+# `local-repo.localRepoJar` in build.mill / project/settings/package.mill:
+# a JAR with a `local-repo.zip` resource (an Ivy repository with the runner,
+# test-runner and java-test-runner at the Scala CLI version), extracted at run
+# time by scala.build.LocalRepo so that a dev build never needs published stubs.
+#
+# Dependency lists mirror the ivy.xml files Mill generates
+# (runner(Scala.runnerScala3), test-runner(Scala.runnerScala3), java-test-runner).
+
+load("@rules_java//java:java_import.bzl", "java_import")
+load("//bazel/constants:values.bzl", "LOCAL_REPO_RESOURCE_PATH", "ORGANIZATION", "SCALA3_LEGACY_LTS", "maven_version")
+
+SCALA3_LIBRARY_LEGACY_LTS = "org.scala-lang:scala3-library_3:" + SCALA3_LEGACY_LTS
+
+# Versions come from the Maven resolution (maven_install.json).
+ASM = "org.ow2.asm:asm:" + maven_version("org.ow2.asm:asm")
+
+COLLECTION_COMPAT = "org.scala-lang.modules:scala-collection-compat_3:" + maven_version("org.scala-lang.modules:scala-collection-compat_3")
+
+TEST_INTERFACE = "org.scala-sbt:test-interface:" + maven_version("org.scala-sbt:test-interface")
+
+JUPITER_INTERFACE_PROVIDED = "com.github.sbt.junit:jupiter-interface:%s:provided" % maven_version("com.github.sbt.junit:jupiter-interface")
+
+MODULES = [
+    (
+        "runner_3",
+        "//modules/runner:runner_legacy_lts",
+        [SCALA3_LIBRARY_LEGACY_LTS],
+    ),
+    (
+        "test-runner_3",
+        "//modules/test-runner:test-runner_legacy_lts",
+        [
+            ASM,
+            COLLECTION_COMPAT,
+            TEST_INTERFACE,
+            SCALA3_LIBRARY_LEGACY_LTS,
+            JUPITER_INTERFACE_PROVIDED,
+        ],
+    ),
+    (
+        "java-test-runner",
+        "//modules/java-test-runner",
+        [
+            ASM,
+            TEST_INTERFACE,
+            JUPITER_INTERFACE_PROVIDED,
+        ],
+    ),
+]
+
+genrule(
+    name = "local_repo_jar",
+    srcs = [target for _, target, _ in MODULES],
+    outs = ["local-repo.jar"],
+    cmd = "$(execpath //bazel/tools:local_repo_zip) $@ bazel-out/stable-status.txt %s " % LOCAL_REPO_RESOURCE_PATH + " ".join([
+        "--module " + ORGANIZATION + " %s $$(echo $(execpaths %s) | tr ' ' '\\n' | grep -v -- '-ijar.jar$$' | grep '\\.jar$$' | head -1) '%s'" % (name, target, ",".join(deps))
+        for name, target, deps in MODULES
+    ]),
+    stamp = 1,
+    tools = ["//bazel/tools:local_repo_zip"],
+)
+
+java_import(
+    name = "local-repo",
+    jars = [":local_repo_jar"],
+    visibility = ["//visibility:public"],
+)

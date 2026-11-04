@@ -1,0 +1,13 @@
+load("//bazel:defs.bzl", "scala_cli_library", "scala_cli_test")
+
+# `build-macros` in build.mill
+scala_cli_library(
+    name = "build-macros",
+    macro = True,
+    visibility = ["//visibility:public"],
+)
+
+scala_cli_test(
+    name = "test",
+    deps = [":build-macros"],
+)

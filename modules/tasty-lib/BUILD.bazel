@@ -1,0 +1,14 @@
+load("//bazel:defs.bzl", "scala_cli_constants", "scala_cli_library")
+
+scala_cli_constants(
+    name = "constants",
+    out = "Constants.scala",
+    template = "//bazel/constants:tasty-lib.scala.tpl",
+)
+
+# `tasty-lib` in build.mill
+scala_cli_library(
+    name = "tasty-lib",
+    srcs = glob(["src/main/scala/**/*.scala"]) + [":constants"],
+    visibility = ["//visibility:public"],
+)

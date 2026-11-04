@@ -74,9 +74,14 @@ class InstallAndUninstallCompletionsTests extends ScalaCliSuite {
   }
 
   lazy val zshRcScript: String = {
-    val projDirs = ProjectDirectories.from(null, null, "ScalaCli")
-    val dir      = os.Path(projDirs.dataLocalDir, TestUtil.pwd) / "completions" / "zsh"
-    val script   = Seq(
+    // like the CLI (scala.build.Directories), honour SCALA_CLI_HOME
+    val dataLocalDir = Option(System.getenv("SCALA_CLI_HOME")).filter(_.trim.nonEmpty) match {
+      case Some(home) => os.Path(home, TestUtil.pwd) / "data-local"
+      case None       =>
+        os.Path(ProjectDirectories.from(null, null, "ScalaCli").dataLocalDir, TestUtil.pwd)
+    }
+    val dir    = dataLocalDir / "completions" / "zsh"
+    val script = Seq(
       s"""fpath=("$dir" $$fpath)""",
       "compinit"
     ).map(_ + System.lineSeparator()).mkString

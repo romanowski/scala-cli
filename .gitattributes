@@ -1,1 +1,2 @@
 *.mill linguist-language=Scala
+*.bat text eol=crlf

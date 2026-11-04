@@ -1,0 +1,116 @@
+load("//bazel:defs.bzl", "scala_cli_constants", "scala_cli_integration_test", "scala_cli_library", "scala_cli_test")
+
+# `integration` (main sources) in build.mill
+scala_cli_library(
+    name = "integration",
+    testonly = True,
+    scalacopts = ["-deprecation"],
+    deps = ["@maven//:com_lihaoyi_os_lib_3"],
+)
+
+scala_cli_constants(
+    name = "test_constants",
+    out = "Constants.scala",
+    rlocations = {"//bazel/tools:cs": "cs_rlocation"},
+    template = "//bazel/constants:integration-test.scala.tpl",
+    testonly = True,
+)
+
+# The integration test sources; run by the `scala_cli_integration_test`
+# targets below, not directly (`:test` is tagged manual).
+scala_cli_test(
+    name = "test",
+    srcs = glob([
+        "src/test/scala/**/*.scala",
+        "src/test/java/**/*.java",
+    ]) + [":test_constants"],
+    data = ["//bazel/tools:cs"],
+    tags = ["manual"],
+    deps = [
+        ":integration",
+        # scala.cli.config (GitHubTests): the published config_3 is excluded from the
+        # Maven resolution in favor of this module (MODULE.bazel)
+        "//modules/config",
+        "@maven//:ch_epfl_scala_bsp4j",
+        "@maven//:com_github_docker_java_docker_java_core",
+        "@maven//:com_github_docker_java_docker_java_transport_zerodep",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_core_3",
+        "@maven//:com_github_plokhotnyuk_jsoniter_scala_jsoniter_scala_macros_3",
+        "@maven//:com_lihaoyi_pprint_3",
+        "@maven//:io_get_coursier_coursier_3",
+        "@maven//:io_get_coursier_coursier_archive_cache_3",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_eclipse_jgit_org_eclipse_jgit",
+        "@maven//:org_jsoup_jsoup",
+        "@maven//:org_scala_lang_scala3_directives_parser_3",
+        "@maven//:org_slf4j_slf4j_nop",
+        "@maven//:org_virtuslab_scala_cli_libsodiumjni",
+    ],
+)
+
+# `./mill -i integration.test.jvm` (the standalone JVM launcher, run with `java -jar`).
+# Select the CI group as with Mill: --test_env=SCALA_CLI_IT_GROUP=<n>.
+# Filter suites as with Mill: --test_filter='scala.cli.integration.RunTestsDefault'.
+scala_cli_integration_test(
+    name = "jvm",
+    kind = "jvm",
+    launcher = "//modules/cli:scala-cli-standalone-launcher",
+    lib = ":test-lib",
+    timeout = "eternal",
+)
+
+# `./mill -i integration.test.jvmBootstrapped`
+scala_cli_integration_test(
+    name = "jvmBootstrapped",
+    kind = "jvmBootstrapped",
+    launcher = "//modules/cli:scala-cli-bootstrapped-jar",
+    lib = ":test-lib",
+    timeout = "eternal",
+)
+
+# `./mill -i integration.test.native` (native launcher built by //modules/cli:scala-cli-native).
+scala_cli_integration_test(
+    name = "native",
+    kind = "native",
+    launcher = "//modules/cli:scala-cli-native",
+    lib = ":test-lib",
+    tags = ["manual"],
+    timeout = "eternal",
+)
+
+# `./mill -i nativeIntegrationTests` with SCALA_CLI_IT_FORCED_LAUNCHER_DIRECTORY: tests a
+# prebuilt native launcher (e.g. a CI artifact), without building one:
+#   bazel test //modules/integration:native-prebuilt --test_env=SCALA_CLI_IT_FORCED_LAUNCHER=$PWD/scala-cli
+scala_cli_integration_test(
+    name = "native-prebuilt",
+    kind = "native",
+    launcher = None,
+    lib = ":test-lib",
+    tags = ["manual"],
+    timeout = "eternal",
+)
+
+# `./mill -i integration.test.nativeStatic` / `integration.test.nativeMostlyStatic`
+# (Linux x86_64), with the image built by Bazel or, as with Mill's
+# SCALA_CLI_IT_FORCED_{STATIC,MOSTLY_STATIC}_LAUNCHER_DIRECTORY, a prebuilt one.
+[
+    (
+        scala_cli_integration_test(
+            name = "native-" + kind,
+            kind = "native-" + kind,
+            launcher = "//modules/cli:scala-cli-native-" + kind,
+            lib = ":test-lib",
+            tags = ["manual"],
+            timeout = "eternal",
+        ),
+        scala_cli_integration_test(
+            name = "native-%s-prebuilt" % kind,
+            kind = "native-" + kind,
+            launcher = None,
+            lib = ":test-lib",
+            tags = ["manual"],
+            timeout = "eternal",
+        ),
+    )
+    for kind in ["static", "mostly-static"]
+]

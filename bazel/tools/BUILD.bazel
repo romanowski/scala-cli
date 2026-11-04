@@ -1,0 +1,71 @@
+load("@rules_java//java:java_binary.bzl", "java_binary")
+
+
+# Coursier CLI (`cs`) for the host platform, used by tests (Constants.cs). Windows needs
+# the .exe extension to run it, hence a separate target there.
+alias(
+    name = "cs",
+    actual = select({
+        "@platforms//os:windows": ":cs_windows",
+        "//conditions:default": ":cs_unix",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "cs_unix",
+    srcs = select({
+        ":macos_arm64": ["@cs_aarch64_apple_darwin//file"],
+        ":macos_x86_64": ["@cs_x86_64_apple_darwin//file"],
+        ":linux_arm64": ["@cs_aarch64_pc_linux//file"],
+        "//conditions:default": ["@cs_x86_64_pc_linux//file"],
+    }),
+    outs = ["bin/cs"],
+    cmd = "gunzip -c $< > $@ && chmod +x $@",
+    executable = True,
+)
+
+genrule(
+    name = "cs_windows",
+    srcs = ["@cs_x86_64_pc_win32//:cs-x86_64-pc-win32.exe"],
+    outs = ["bin/cs.exe"],
+    cmd = "cp $< $@",
+    executable = True,
+)
+
+[
+    config_setting(
+        name = name,
+        constraint_values = ["@platforms//os:" + os, "@platforms//cpu:" + cpu],
+        visibility = ["//visibility:public"],
+    )
+    for name, os, cpu in [
+        ("macos_arm64", "macos", "aarch64"),
+        ("macos_x86_64", "macos", "x86_64"),
+        ("linux_arm64", "linux", "aarch64"),
+        ("linux_x86_64", "linux", "x86_64"),
+    ]
+]
+
+java_binary(
+    name = "filter_jar",
+    srcs = ["FilterJar.java"],
+    main_class = "FilterJar",
+    visibility = ["//visibility:public"],
+)
+
+java_binary(
+    name = "local_repo_zip",
+    srcs = ["LocalRepoZip.java"],
+    main_class = "LocalRepoZip",
+    visibility = ["//visibility:public"],
+)
+
+exports_files([
+    # Shell preamble of Mill's `cli[].standaloneLauncher` (a coursier launcher): runs the
+    # JAR appended to it with `java -jar "$0"`.
+    "standalone-launcher-preamble.sh",
+    "docs_test.sh",
+    "integration_test.sh",
+    "run_in_workspace.sh",
+])

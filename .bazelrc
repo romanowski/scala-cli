@@ -1,0 +1,61 @@
+# Bazel build for Scala CLI (runs alongside Mill during the migration; see bazel/README.md)
+
+# Compilers / build tools run on JDK 21 (the svm compile-only dependency is Java 21 bytecode);
+# binaries and tests run on JDK 17, like Mill (Java.defaultJava, ScalaCliTests.jvmVersion).
+common --java_runtime_version=remotejdk_17
+common --tool_java_runtime_version=remotejdk_21
+common --java_language_version=17
+common --tool_java_language_version=17
+
+# Version / VCS values for the generated Constants.scala files (STABLE_ keys only).
+common --workspace_status_command=bazel/workspace_status.sh
+
+# Use protobuf's prebuilt protoc (for rules_scala's worker) instead of compiling it, and
+# its C++ dependencies (zlib, abseil...), from source. Default from protobuf v34.
+common --@protobuf//bazel/toolchains:prefer_prebuilt_protoc
+
+build --incompatible_strict_action_env
+# Mill compiles against the full transitive class path; do the same for Java.
+build --experimental_strict_java_deps=off
+test --test_output=errors
+
+# Local developer convenience: keep a disk cache across clean checkouts.
+common:local --disk_cache=~/.cache/bazel-disk
+
+# CI settings (GitHub Actions)
+common:ci --color=yes
+common:ci --curses=no
+common:ci --show_progress_rate_limit=10
+common:ci --disk_cache=~/.cache/bazel-disk
+common:ci --repository_cache=~/.cache/bazel-repo
+# Integration test groups run serially in one JVM and can take longer than Bazel's
+# "eternal" timeout (1 hour): allow 170 minutes, within the CI jobs' 180-minute limit
+# (like the Mill jobs').
+test:ci --test_timeout=-1,-1,-1,10200
+
+try-import %workspace%/user.bazelrc
+
+# Locale of the caller, as Mill's test runs inherit it (e.g. RunTests212's -encoding tests).
+test --test_env=LANG --test_env=LC_ALL
+
+# Unit tests (ScalaCliTests.forkEnv in project/settings/package.mill).
+# Tests spawn JVMs / Bloop with JAVA_HOME, which Mill pins to Temurin 17. Pass a JDK 17
+# explicitly (CI does), or set it once in user.bazelrc:
+#   test --test_env=JAVA_HOME=/path/to/jdk17
+#   test --test_env=SCALA_CLI_TESTS_HOST_JAVA_HOME=/path/to/jdk17
+test --test_env="SCALA_CLI_EXTRA_TIMEOUT=120 seconds"
+
+# Windows: the test / run wrappers need a runfiles tree (applied automatically on
+# Windows hosts by --enable_platform_specific_config).
+common --enable_platform_specific_config
+common:windows --enable_runfiles
+# Windows' basic environment, which Mill's test runs inherit (strict test environments
+# drop it): without PATHEXT, programs such as `node` aren't found on the PATH.
+test:windows --test_env=PATHEXT --test_env=SystemRoot --test_env=WINDIR --test_env=ComSpec
+test:windows --test_env=SystemDrive --test_env=ProgramData --test_env=ProgramFiles
+test:windows --test_env=APPDATA --test_env=LOCALAPPDATA --test_env=USERPROFILE
+test:windows --test_env=TEMP --test_env=TMP
+# WiX Toolset location (set on the CI runners), used to build .msi packages
+test:windows --test_env=WIX
+# Bazel can't execute the .sh workspace status command on Windows: go through bash.
+common:windows --workspace_status_command=bazel/workspace_status.bat
